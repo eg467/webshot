@@ -23,7 +23,8 @@ namespace WebshotService.State.Actions.ProjectActions
     public record SetScreenshotOptions(ScreenshotOptions Options) : IAction;
     public record SetProjectCredentials(ProjectCredentials Credentials) : IAction;
     public record SetSeedUris(IEnumerable<Uri> Uris) : IAction;
-    public record SetSelectedPages(IReadOnlyDictionary<Uri, bool> Pages) : IAction;
+    public record SetTargetPages(IReadOnlyDictionary<Uri, bool> Pages) : IAction;
+    public record ToggleTargetPageEnabled(Uri Page, bool Enabled) : IAction;
     public record SetCrawlResults(CrawlResults Results) : IAction;
 }
 

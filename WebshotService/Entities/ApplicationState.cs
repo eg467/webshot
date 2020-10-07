@@ -3,14 +3,6 @@ using System.Collections.Immutable;
 
 namespace WebshotService.Entities
 {
-    public static class InitialApplicationState
-    {
-        public static ApplicationState FromFile(string path) =>
-            new FileStore<ApplicationState>(path).Load();
-
-        public static ApplicationState Default() => new ApplicationState();
-    }
-
     public record ApplicationState
     {
         public Project? CurrentProject { get; init; }

@@ -17,7 +17,7 @@ namespace WebshotService.ProjectStore
         public event EventHandler<ProjectSavedEventArgs>? Saved;
 
         public string Id => ProjectPath;
-        public bool Exists => _filestore.FileExists;
+        public bool Exists => _filestore.Exists;
         public string ProjectPath => _filestore.FilePath;
 
         /// <summary>
@@ -93,7 +93,7 @@ namespace WebshotService.ProjectStore
 
         public List<(string Id, ScreenshotResults Result)> GetResultsBySessionId() =>
             FileSessionStore.FromDirectory(ScreenshotDir)
-                .Where(x => x.HasManifest)
+                .Where(x => x.Exists)
                 .Select(x => (x.Id, Result: x.Load()))
                 .OrderBy(x => x.Result.Timestamp)
                 .ToList();
@@ -119,7 +119,7 @@ namespace WebshotService.ProjectStore
         public string Id { get; }
         public string DirectoryPath { get; }
         public string ManifestPath => Path.Combine(DirectoryPath, ScreenshotManifestFilename);
-        public bool HasManifest => ManifestStore.FileExists;
+        public bool Exists => ManifestStore.Exists;
 
         private FileStore<ScreenshotResults> ManifestStore => new(ManifestPath);
 

@@ -35,15 +35,18 @@ namespace WebshotService.Screenshotter
 
             using ChromeDriverAdapter ss = new(ScreenshotOptions, _project.SpiderResults.BrokenLinks, _project.Options.Credentials);
             int i = 0;
-            var targetPages = ScreenshotOptions.TargetPages;
-            foreach (var uri in targetPages)
+            var selectedTargets = ScreenshotOptions.TargetPages
+                .Where(kv => kv.Value)
+                .Select(kv => kv.Key)
+                .ToList();
+            foreach (var uri in selectedTargets)
             {
                 if (token?.IsCancellationRequested == true)
                 {
                     throw new TaskCanceledException("The screenshotting task was canceled.");
                 }
 
-                progress?.Report(++i, targetPages.Length, uri.AbsoluteUri);
+                progress?.Report(++i, selectedTargets.Count, uri.AbsoluteUri);
 
                 var result = await ScreenshotPageAsAllDevices(ss, uri);
                 results = results with { Screenshots = results.Screenshots.Add(result) };

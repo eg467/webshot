@@ -18,11 +18,6 @@ namespace WebshotService.ProjectStore
         event EventHandler<ProjectSavedEventArgs> Saved;
 
         /// <summary>
-        /// True if the object exists and can be loaded
-        /// </summary>
-        bool Exists { get; }
-
-        /// <summary>
         /// Retrieves a saved screenshot from the project
         /// </summary>
         /// <param name="sessionId"></param>

@@ -5,6 +5,8 @@ namespace WebshotService
 {
     public interface IObjectStore<T>
     {
+        bool Exists { get; }
+
         void Save(T obj);
 
         T Load();
@@ -13,7 +15,7 @@ namespace WebshotService
     public class FileStore<T> : IObjectStore<T> where T : class
     {
         public string FilePath { get; set; }
-        public bool FileExists => File.Exists(FilePath);
+        public bool Exists => File.Exists(FilePath);
 
         public FileStore(string filePath)
         {

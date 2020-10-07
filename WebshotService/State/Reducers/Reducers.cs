@@ -7,6 +7,8 @@ using ApplicationActions = WebshotService.State.Actions.ApplicationActions;
 using SchedulerActions = WebshotService.State.Actions.SchedulerActions;
 using ProjectActions = WebshotService.State.Actions.ProjectActions;
 using RecentProjectsActions = WebshotService.State.Actions.RecentProjectsActions;
+using System.Drawing.Text;
+using System.Security.Cryptography.X509Certificates;
 
 namespace WebshotService.State.Reducers
 {
@@ -20,13 +22,27 @@ namespace WebshotService.State.Reducers
                 .Reducer((s, a) =>
                     new ApplicationState()
                     {
-                        CurrentProject = c.Sub(s.CurrentProject).Reducer(ProjectReducers.ProjectReducer).Reduce(),
-                        ProjectResults = c.Sub(s.ProjectResults).Reducer(ProjectReducers.ResultsReducer).Reduce(),
-                        IsTakingScreenshots = c.Sub(s.IsTakingScreenshots).Setter<ApplicationActions.SetIsTakingScreenshots>(x => x.IsTakingScreenshots).Reduce(),
-                        IsCrawlingSite = c.Sub(s.IsCrawlingSite).Setter<ApplicationActions.SetIsCrawlingSite>(x => x.IsCrawling).Reduce(),
-                        Progress = c.Sub(s.Progress).Setter<ApplicationActions.SetProgress>(x => x.Progress).Reduce(),
-                        SchedulerState = c.Sub(s.SchedulerState).Reducer(SchedulerReducers.SchedulerReducer).Reduce(),
-                        RecentProjects = c.Sub(s.RecentProjects).Reducer(ProjectReducers.ProjectHistory).Reduce()
+                        CurrentProject = c.Sub(s.CurrentProject)
+                            .Reducer(ProjectReducers.ProjectReducer)
+                            .Reduce(),
+                        ProjectResults = c.Sub(s.ProjectResults)
+                            .Reducer(ProjectReducers.ResultsReducer)
+                            .Reduce(),
+                        IsTakingScreenshots = c.Sub(s.IsTakingScreenshots)
+                            .Setter<ApplicationActions.SetIsTakingScreenshots>(x => x.IsTakingScreenshots)
+                            .Reduce(),
+                        IsCrawlingSite = c.Sub(s.IsCrawlingSite)
+                            .Setter<ApplicationActions.SetIsCrawlingSite>(x => x.IsCrawling)
+                            .Reduce(),
+                        Progress = c.Sub(s.Progress)
+                            .Setter<ApplicationActions.SetProgress>(x => x.Progress)
+                            .Reduce(),
+                        SchedulerState = c.Sub(s.SchedulerState)
+                            .Reducer(SchedulerReducers.SchedulerReducer)
+                            .Reduce(),
+                        RecentProjects = c.Sub(s.RecentProjects)
+                            .Reducer(ProjectReducers.ProjectHistory)
+                            .Reduce()
                     })
                 .Reduce();
         }
@@ -77,11 +93,34 @@ namespace WebshotService.State.Reducers
                 .Reducer((s, a) =>
                     new Options()
                     {
-                        SpiderOptions = c.Sub(s.SpiderOptions).Setter<ProjectActions.SetSpiderOptions>(x => x.Options).Reduce(),
-                        ScreenshotOptions = c.Sub(s.ScreenshotOptions).Setter<ProjectActions.SetScreenshotOptions>(x => x.Options).Reduce(),
-                        Credentials = c.Sub(s.Credentials).Setter<ProjectActions.SetProjectCredentials>(x => x.Credentials).Reduce()
+                        SpiderOptions = c.Sub(s.SpiderOptions)
+                            .Setter<ProjectActions.SetSpiderOptions>(x => x.Options)
+                            .Reduce(),
+                        ScreenshotOptions = c.Sub(s.ScreenshotOptions)
+                            .Setter<ProjectActions.SetScreenshotOptions>(x => x.Options)
+                            .Reducer(ScreenshotOptionsReducer)
+                            .Reduce(),
+                        Credentials = c.Sub(s.Credentials)
+                            .Setter<ProjectActions.SetProjectCredentials>(x => x.Credentials)
+                            .Reduce()
                     })
                 .Reduce();
+        }
+
+        public static ScreenshotOptions ScreenshotOptionsReducer(ScreenshotOptions state, IAction action)
+        {
+            return action switch
+            {
+                ProjectActions.SetTargetPages setTargetPagesAction => state with
+                {
+                    TargetPages = setTargetPagesAction.Pages.ToImmutableDictionary()
+                },
+                ProjectActions.ToggleTargetPageEnabled togglePageAction => state with
+                {
+                    TargetPages = state.TargetPages.SetItem(togglePageAction.Page, togglePageAction.Enabled)
+                },
+                _ => state,
+            };
         }
 
         public static CrawlResults CrawlResultReducer(CrawlResults state, IAction action)
@@ -143,20 +182,18 @@ namespace WebshotService.State.Reducers
                     }
                 case SchedulerActions.MarkScheduledProjectComplete markCompletedAction:
                     {
-                        SchedulerState modifyState(SchedulerState s) =>
-                            s with
+                        if (state.CurrentProject is null)
                         {
-                            CurrentProject = null,
-                            ScheduledProjects = s.ScheduledProjects.ImmutableConditionalMap(isCurrentProj, markComplete)
-                        };
-                        bool isCurrentProj(ScheduledProject sp) =>
-                            sp.ProjectId.Equals(state.CurrentProject?.Id, StringComparison.Ordinal);
-                        static ScheduledProject markComplete(ScheduledProject sp) =>
-                            sp with { LastRun = DateTime.Now, RunImmediately = false };
-                        SchedulerState modifyStateIfInProgress(SchedulerState s) =>
-                            s.CurrentProject is object ? modifyState(s) : s;
+                            throw new InvalidOperationException("No project is currently running.");
+                        }
 
-                        return modifyStateIfInProgress(state);
+                        return state with
+                        {
+                            ScheduledProjects = state.ScheduledProjects.ImmutableConditionalMap(
+                                p => Equals(p.ProjectId, state.CurrentProject?.Id),
+                                p => p with { LastRun = DateTime.Now, RunImmediately = false }),
+                            CurrentProject = null
+                        };
                     }
                 case SchedulerActions.UpdateScheduledProject updateAction:
                     {

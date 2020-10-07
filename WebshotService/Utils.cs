@@ -78,6 +78,15 @@ namespace WebshotService
 
     public static class Extensions
     {
+        public static int Find<T>(this IImmutableList<T> items, Func<T, bool> predicate)
+        {
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (predicate(items[i])) return i;
+            }
+            return -1;
+        }
+
         /// <summary>
         /// Transforms all elements in a list.
         /// </summary>
