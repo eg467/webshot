@@ -1,24 +1,83 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using WebShot.Menus.ColoredConsole;
+using WebshotService.State.Actions.RecentProjectsActions;
 
 namespace WebShot.Menus
 {
-    public class ListSelectionInput<TItem>
+    public partial class SelectionMenu<TItem> : Menu<ListWithSelection<TItem>>
+    {
+        public int Columns { get; set; }
+
+        private readonly Option<ListWithSelection<TItem>> _option;
+
+        public SelectionMenu(
+            ColoredOutput header,
+            IEnumerable<TItem> items,
+            Func<TItem, string>? labeler,
+            Func<ListWithSelection<TItem>, ICompletionHandler, Task> handler,
+            CompletionHandler? completionHandler,
+            int columns = 1,
+            bool canCancel = true)
+        : base(
+              new(),
+              header,
+              GetInputter(items, header, labeler))
+        {
+            _option = new Option<ListWithSelection<TItem>>(
+                null,
+                x => true,
+                (x, c) =>
+                {
+                    if (x.SelectedIndex == -1)
+                    {
+                        c.CompletionHandler = OptionCompletionHandlers.Back;
+                        return Task.CompletedTask;
+                    }
+                    return handler(x, c);
+                },
+                completionHandler);
+            AddOption(_option);
+        }
+
+        private static Inputter<ListWithSelection<TItem>> GetInputter(
+            IEnumerable<TItem> items,
+            IOutput header,
+            Func<TItem, string>? labeler,
+            int columns = 1,
+            bool canCancel = true)
+        {
+            SelectionMenuInputter<TItem> inputter = new SelectionMenuInputter<TItem>(items, header, labeler)
+            {
+                ColumnCount = columns,
+                CanCancel = canCancel,
+            };
+
+            return inputter.ChooseOption;
+        }
+    }
+
+    public class SelectionMenuInputter<TItem>
     {
         protected readonly List<TItem> Items;
-
+        protected readonly IOutput _header;
         public readonly Func<TItem, string> _labeler;
 
         /// <summary>
         /// Creates a user-navigable menu.
         /// </summary>
         /// <param name="items">The options available for selection.</param>
+        /// <param name="header">The header/instructions for the menu, since the console will be cleared entirely.</param>
         /// <param name="labeler">A function that converts a list element to a string label, null to use <see cref="TItem.ToString()"/></param>.
-        public ListSelectionInput(IEnumerable<TItem> items, Func<TItem, string>? labeler = null)
+        public SelectionMenuInputter(
+            IEnumerable<TItem> items,
+            IOutput? header,
+            Func<TItem, string>? labeler = null)
         {
             Items = items.ToList();
+            _header = header ?? new MixedOutput();
             _labeler = x => SafeLabeler(x, labeler);
         }
 
@@ -45,28 +104,35 @@ namespace WebShot.Menus
         protected virtual IOutput PrintedLabel(int index) =>
             new ColoredOutput(TextOf(index), ColorOf(index));
 
-        public ConsoleColor HoverColor { get; set; } = ConsoleColor.Green;
+        public ConsoleColor HoverColor { get; set; } = ConsoleColor.Cyan;
         public ConsoleColor NormalColor { get; set; } = ConsoleColor.White;
 
         public ListWithSelection<TItem> ChooseOption()
         {
             // Adapted From: https://stackoverflow.com/questions/46908148/controlling-menu-with-the-arrow-keys-and-enter
 
-            if (!Items.Any())
-                return NotFound();
-
             const int startX = 15;
-            const int startY = 8;
-            const int spacingPerLine = 14;
-
+            const int startY = 5;
+            const int spacingPerLine = 5;
             ConsoleKey key;
-
             Console.CursorVisible = false;
-
+            var cancelled = false;
             SelectedIndex = 0;
+
+            if (!Items.Any())
+            {
+                _header.WriteLine();
+                new ColoredOutput("No items are available to select...").WriteLine();
+                DefaultMenuLines.PressKeyToContinue();
+                return new(Items, -1);
+            }
+
             do
             {
                 Console.Clear();
+
+                Console.SetCursorPosition(startX, 0);
+                _header.WriteLine();
 
                 for (int i = 0; i < Items.Count; i++)
                 {
@@ -77,17 +143,18 @@ namespace WebShot.Menus
                 key = Console.ReadKey(true).Key;
 
                 if (CanCancel && key == ConsoleKey.Escape)
-                    return NotFound();
+                {
+                    cancelled = true;
+                    break;
+                }
 
                 HandleKey(key);
             } while (key != ConsoleKey.Enter);
 
-            Console.CursorVisible = true;
             Console.SetCursorPosition(0, startY + Items.Count / ColumnCount + 2);
+            Console.CursorVisible = true;
 
-            return new ListWithSelection<TItem>(Items, SelectedIndex);
-
-            ListWithSelection<TItem> NotFound() => new(Items, -1);
+            return new(Items, !cancelled ? SelectedIndex : -1);
         }
 
         /// <summary>
@@ -145,9 +212,9 @@ namespace WebShot.Menus
         public bool Exists => SelectedIndex >= 0;
 
         public int SelectedIndex { get; init; }
-        public IReadOnlyList<T> Items { get; init; }
+        public List<T> Items { get; init; }
 
-        public ListWithSelection(IReadOnlyList<T> items, int selectedIndex)
+        public ListWithSelection(List<T> items, int selectedIndex)
         {
             SelectedIndex = selectedIndex;
             Items = items;

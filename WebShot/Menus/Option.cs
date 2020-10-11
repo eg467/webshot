@@ -8,13 +8,13 @@ namespace WebShot.Menus
     {
         private readonly IOutput? _prompt;
         private readonly Func<TInput, bool> _isMatch;
-        private readonly Func<TInput, Task> _handler;
+        private readonly Func<TInput, ICompletionHandler, Task> _handler;
         public CompletionHandler CompletionHandler { get; set; }
 
         public Option(
             IOutput? prompt,
             Func<TInput, bool> isMatch,
-            Func<TInput, Task> handler,
+            Func<TInput, ICompletionHandler, Task> handler,
             CompletionHandler? completionHandler = null)
         {
             _prompt = prompt;
@@ -27,7 +27,7 @@ namespace WebShot.Menus
         {
             if (!_isMatch(input))
                 return false;
-            await _handler(input);
+            await _handler(input, this);
             return true;
         }
 

@@ -32,16 +32,14 @@ namespace WebShot.Menus.ColoredConsole
             set => _writer = value == ContentDirection.Horizontal ? HorizontalWrite : VerticalWrite;
         }
 
-        public MixedOutput()
-        {
-            _items = new();
-            _writer = HorizontalWrite;
-        }
-
         public MixedOutput(ContentDirection direction, IEnumerable<IOutput> items)
         {
+            ContentDirection = direction;
             _items = items.ToList();
-            _writer = HorizontalWrite;
+        }
+
+        public MixedOutput() : this(ContentDirection.Horizontal, Enumerable.Empty<IOutput>())
+        {
         }
 
         public MixedOutput(IEnumerable<IOutput> items)
@@ -67,6 +65,12 @@ namespace WebShot.Menus.ColoredConsole
         {
         }
 
+        public static MixedOutput Vertical(IEnumerable<IOutput> items) =>
+            new MixedOutput(ContentDirection.Vertical, items);
+
+        public static MixedOutput Horizontal(IEnumerable<IOutput> items) =>
+            new MixedOutput(ContentDirection.Horizontal, items);
+
         public static MixedOutput operator +(MixedOutput a, MixedOutput b) =>
             new MixedOutput(a._items.Concat(b._items));
 
@@ -84,12 +88,12 @@ namespace WebShot.Menus.ColoredConsole
                 _writer();
         }
 
-        public void HorizontalWrite()
+        private void HorizontalWrite()
         {
             _items.ForEach(i => i.Write());
         }
 
-        public void VerticalWrite()
+        private void VerticalWrite()
         {
             for (int i = 0; i < _items.Count - 1; i++)
                 _items[i].WriteLine();

@@ -71,6 +71,11 @@ namespace WebShot.Menus
         /// </summary>
         protected bool _caseSensitivePattern;
 
+        /// <summary>
+        /// True if <see cref="_matchingPattern"/> should match the full input, false to only match on a portion of the string.
+        /// </summary>
+        protected bool _matchFullInput = true;
+
         private readonly Func<Match, ICompletionHandler, Task>? _handler;
 
         /// <summary>Constructor</summary>
@@ -101,8 +106,21 @@ namespace WebShot.Menus
 
         private Match? GetMatch(string input) =>
             input is string && _matchingPattern is string
-                ? Regex.Match(input, _matchingPattern, RegexOptions)
+                ? Regex.Match(input, FullTextMatchPattern(_matchingPattern), RegexOptions)
                 : null;
+
+        private string FullTextMatchPattern(string originalPattern)
+        {
+            if (!_matchFullInput)
+                return originalPattern;
+
+            if (!originalPattern.StartsWith("^"))
+                originalPattern = "^" + originalPattern;
+            if (!originalPattern.EndsWith("$"))
+                originalPattern += "$";
+
+            return originalPattern;
+        }
 
         /// <summary>
         /// Displays the descriptor and explanation so user knows this option is available.

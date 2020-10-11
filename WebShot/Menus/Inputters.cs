@@ -24,11 +24,5 @@ namespace WebShot.Menus
                 return result;
             };
         }
-
-        public static Inputter<ListWithSelection<T>> SelectionMenu<T>(IEnumerable<T> items)
-        {
-            var menu = new ListSelectionInput<T>(items);
-            return menu.ChooseOption;
-        }
     }
 }

@@ -13,6 +13,12 @@ namespace WebShot.Menus
     {
         public static ColoredOutput InvalidResponse =
             ColoredOutput.Error("Invalid Response, please choose again.");
+
+        public static void PressKeyToContinue()
+        {
+            new ColoredOutput("Press any key to continue...").WriteLine();
+            _ = Console.ReadKey();
+        }
     }
 
     public class ConsoleMenu : Menu<string>
@@ -22,41 +28,6 @@ namespace WebShot.Menus
             IOutput description,
             Inputter<string> inputGetter) : base(options, description, inputGetter)
         {
-        }
-    }
-
-    public partial class SelectionMenu<TItem> : Menu<ListWithSelection<TItem>>
-    {
-        public int Columns { get; set; }
-
-        private readonly Option<ListWithSelection<TItem>> _option;
-
-        public SelectionMenu(
-            ColoredOutput header,
-            IEnumerable<TItem> items,
-            Func<TItem, string>? labeler,
-            Func<ListWithSelection<TItem>, Task> handler,
-            CompletionHandler? completionHandler,
-            int columns = 1,
-            bool canCancel = true)
-        : base(
-              new(),
-              header,
-              GetInputter(items, labeler))
-        {
-            _option = new Option<ListWithSelection<TItem>>(null, x => x.SelectedIndex >= 0, handler, completionHandler);
-            AddOption(_option);
-        }
-
-        private static Inputter<ListWithSelection<TItem>> GetInputter(IEnumerable<TItem> items, Func<TItem, string>? labeler, int columns = 1, bool canCancel = true)
-        {
-            ListSelectionInput<TItem> inputter = new ListSelectionInput<TItem>(items, labeler)
-            {
-                ColumnCount = columns,
-                CanCancel = canCancel,
-            };
-
-            return inputter.ChooseOption;
         }
     }
 
