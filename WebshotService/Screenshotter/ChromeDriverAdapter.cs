@@ -3,13 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
-using System.Text;
-using System.Threading.Tasks;
 using WebshotService.Entities;
 using System.IO;
 using System.Threading;
-using System.Runtime.CompilerServices;
-using WebshotService.Spider;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 

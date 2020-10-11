@@ -1,12 +1,9 @@
 ﻿using Redux;
 using System.Reactive.Linq;
 using System;
-using System.IO;
-using System.Reflection;
 using WebshotService.Entities;
 using WebshotService.ProjectStore;
 using System.Threading.Tasks;
-using WebshotService.State.Reducers;
 using System.Collections.Generic;
 using WebshotService.State.Actions;
 using System.Threading;
@@ -21,13 +18,14 @@ namespace WebshotService.State.Store
     /// </summary>
     public class ApplicationStateMachine : IDisposable, IObservable<ApplicationState>
     {
-        private ApplicationState State => _store.GetState();
+        public ApplicationState State => _store.GetState();
         private readonly IStore<ApplicationState> _store;
         private readonly IProjectStoreFactory _projectStoreFactory;
         private readonly IProgress<TaskProgress> _progress;
 
-        public ApplicationStateMachine(ApplicationState initialState, IProjectStoreFactory projectStoreFactory)
+        public ApplicationStateMachine(IObjectStore<ApplicationState> initialStateStore, IProjectStoreFactory projectStoreFactory)
         {
+            var initialState = initialStateStore.Exists ? initialStateStore.Load() : new();
             _store = new Store<ApplicationState>(Reducers.Reducers.ApplicationReducer, initialState);
             _projectStoreFactory = projectStoreFactory;
             _progress = new Progress<TaskProgress>(SetProgress);
@@ -100,8 +98,13 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.ToggleTargetPageEnabled(uri, enabled));
         }
 
-        public async Task RunScreenshotter(IProjectStore projectStore, CancellationToken? token)
+        public async Task RunScreenshotter(CancellationToken? token)
         {
+            if (State.CurrentProject is null)
+            {
+                throw new InvalidOperationException("No project is opened.");
+            }
+            var projectStore = _projectStoreFactory.Create(State.CurrentProject.Id);
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(true));
             var screenshotter = new ProjectScreenshotter(projectStore);
             await screenshotter.TakeScreenshotsAsync(token, _progress);

@@ -1,6 +1,4 @@
-﻿using System.ComponentModel;
-
-namespace WebshotService.Entities
+﻿namespace WebshotService.Entities
 {
     public record Options
     {

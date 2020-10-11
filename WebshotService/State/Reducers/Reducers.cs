@@ -7,8 +7,6 @@ using ApplicationActions = WebshotService.State.Actions.ApplicationActions;
 using SchedulerActions = WebshotService.State.Actions.SchedulerActions;
 using ProjectActions = WebshotService.State.Actions.ProjectActions;
 using RecentProjectsActions = WebshotService.State.Actions.RecentProjectsActions;
-using System.Drawing.Text;
-using System.Security.Cryptography.X509Certificates;
 
 namespace WebshotService.State.Reducers
 {

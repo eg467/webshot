@@ -1,8 +1,5 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-using System;
+﻿using System;
 using System.Collections.Generic;
-using System.Collections.Immutable;
 using System.Data;
 using System.Diagnostics;
 using System.Linq;
@@ -59,8 +56,8 @@ namespace WebshotService.Spider
             Add(new ForbiddenUriExtensionValidator("css", "png", "jpg", "jpeg", "js", "pdf"));
         }
 
-        public async Task<CrawlResults> Crawl(IProgress<TaskProgress>? progress = null) =>
-            await Crawl(CancellationToken.None, progress);
+        public Task<CrawlResults> Crawl(IProgress<TaskProgress>? progress = null) =>
+            Crawl(CancellationToken.None, progress);
 
         public async Task<CrawlResults> Crawl(
             CancellationToken token,
@@ -150,7 +147,7 @@ namespace WebshotService.Spider
             && _uriCrawlValidators.All(v => v.Validate(uri));
 
         private static bool IsHtml(string content) =>
-            content.IndexOf("<html", StringComparison.OrdinalIgnoreCase) >= 0;
+            content.Contains("<html", StringComparison.OrdinalIgnoreCase);
 
         private void FoundLink(Link link)
         {
@@ -169,10 +166,4 @@ namespace WebshotService.Spider
             WebshotHttpClient.ClearCredentials();
         }
     }
-
-    //[JsonConverter(typeof(StringEnumConverter))]
-    //public enum SpiderPageStatus
-    //{
-    //    Visited, Unvisited, Excluded, Redirected, Error
-    //}
 }
