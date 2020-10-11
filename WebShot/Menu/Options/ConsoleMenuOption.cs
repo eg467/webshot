@@ -1,49 +1,11 @@
 ﻿using System;
-using WebShot.Menus.ColoredConsole;
-using System.Collections.Generic;
+using WebShot.Menu.ColoredConsole;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using WebShot.Menu.Menus;
 
-namespace WebShot.Menus
+namespace WebShot.Menu.Options
 {
-    public interface IMenuOption<TInput> : ICompletionHandler
-    {
-        /// <summary>
-        /// Executes the option if it's applicable.
-        /// </summary>
-        /// <param name="input">The raw input from the menu.</param>
-        /// <returns>True if the option handled the input.</returns>
-        Task<bool> Execute(TInput input);
-
-        /// <summary>
-        /// Creates a user prompt to notify the user about the option and how to select it.
-        /// </summary>
-        IOutput? Prompt();
-    }
-
-    public delegate Task CompletionHandler(MenuNavigator navigator);
-
-    public interface ICompletionHandler
-    {
-        CompletionHandler CompletionHandler { get; set; }
-    }
-
-    public class ToggleMenuOption<TItem> : IMenuOption<List<(string, bool)>>
-    {
-        public CompletionHandler CompletionHandler { get; set; } =
-            OptionCompletionHandlers.Back;
-
-        public IOutput? Prompt()
-        {
-            return null;
-        }
-
-        public Task<bool> Execute(List<(string, bool)> input)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
     public class ConsoleMenuOption : IMenuOption<string>
     {
         /// <summary>
@@ -59,12 +21,14 @@ namespace WebShot.Menus
         /// <summary>
         /// A description of the what the user should enter to match this option.
         /// </summary>
-        public ColoredOutput Descriptor { get; } = new ColoredOutput("", ConsoleColor.Cyan);
+        public ColoredOutput Descriptor { get; } =
+            new ColoredOutput("", ConsoleColor.Cyan);
 
         /// <summary>
         /// An explanation of what this option does when selected.
         /// </summary>
-        public ColoredOutput Explanation { get; } = new ColoredOutput("", ConsoleColor.Gray);
+        public ColoredOutput Explanation { get; } =
+            new ColoredOutput("", ConsoleColor.Gray);
 
         /// <summary>
         /// True if the pattern matching should be case sensitive.
@@ -101,13 +65,20 @@ namespace WebShot.Menus
             CompletionHandler = completionHandler ?? OptionCompletionHandlers.Back;
         }
 
+        /// <summary>Constructor</summary>
+        /// <param name="descriptor">A user-friendly description of how to select this option.</param>
+        /// <param name="explanation">A user-friendly explanation of what the option does.</param>
+        /// <param name="completionHandler">What to do, usually menu navigation, after the option has triggered.</param>
+        public ConsoleMenuOption(
+            string descriptor,
+            string explanation,
+            CompletionHandler? completionHandler = null)
+        : this(descriptor, explanation, descriptor, null, completionHandler, false)
+        {
+        }
+
         private RegexOptions RegexOptions =>
             _caseSensitivePattern ? RegexOptions.None : RegexOptions.IgnoreCase;
-
-        private Match? GetMatch(string input) =>
-            input is string && _matchingPattern is string
-                ? Regex.Match(input, FullTextMatchPattern(_matchingPattern), RegexOptions)
-                : null;
 
         private string FullTextMatchPattern(string originalPattern)
         {
@@ -141,18 +112,13 @@ namespace WebShot.Menus
                 await _handler(m, this);
             return true;
         }
-    }
 
-    /// <summary>
-    /// Provides client a means to change the next menu displayed.
-    /// </summary>
-    public class OptionActionArgs
-    {
-        public ICompletionHandler OnCompletion { get; }
-
-        public OptionActionArgs(ICompletionHandler completionHandler)
-        {
-            OnCompletion = completionHandler;
-        }
+        private Match? GetMatch(string input) =>
+            input is string && _matchingPattern is string
+                ? Regex.Match(
+                    input,
+                    FullTextMatchPattern(_matchingPattern),
+                    RegexOptions)
+                : null;
     }
 }

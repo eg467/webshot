@@ -1,17 +1,17 @@
 ﻿using System;
 using System.Threading.Tasks;
-using WebShot.Menus.ColoredConsole;
+using WebShot.Menu.ColoredConsole;
 
-namespace WebShot.Menus
+namespace WebShot.Menu.Options
 {
-    internal class Option<TInput> : IMenuOption<TInput>
+    internal class CustomOption<TInput> : IMenuOption<TInput>
     {
         private readonly IOutput? _prompt;
         private readonly Func<TInput, bool> _isMatch;
         private readonly Func<TInput, ICompletionHandler, Task> _handler;
         public CompletionHandler CompletionHandler { get; set; }
 
-        public Option(
+        public CustomOption(
             IOutput? prompt,
             Func<TInput, bool> isMatch,
             Func<TInput, ICompletionHandler, Task> handler,

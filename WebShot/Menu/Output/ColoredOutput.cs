@@ -6,7 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using WebshotService;
 
-namespace WebShot.Menus.ColoredConsole
+namespace WebShot.Menu.ColoredConsole
 {
     public interface IOutput
     {
@@ -34,6 +34,9 @@ namespace WebShot.Menus.ColoredConsole
 
         public MixedOutput(ContentDirection direction, IEnumerable<IOutput> items)
         {
+            // For compiler null warning
+            _writer = HorizontalWrite;
+
             ContentDirection = direction;
             _items = items.ToList();
         }

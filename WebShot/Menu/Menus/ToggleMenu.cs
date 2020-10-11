@@ -3,15 +3,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using WebShot.Menus.ColoredConsole;
+using WebShot.Menu.ColoredConsole;
+using WebShot.Menu.Menus;
+using WebShot.Menu.Options;
 
-namespace WebShot.Menus
+namespace WebShot.Menu.Menus
 {
-    public partial class ToggleMenu<TItem> : Menu<ListWithSelection<(TItem, bool)>>
+    public class ToggleMenu<TItem> : Menu<ListWithSelection<(TItem, bool)>>
     {
         public int Columns { get; set; }
 
-        private readonly Option<ListWithSelection<(TItem, bool)>> _option;
+        private readonly CustomOption<ListWithSelection<(TItem, bool)>> _option;
 
         public ToggleMenu(
             ColoredOutput header,
@@ -35,7 +37,7 @@ namespace WebShot.Menus
             bool canCancel = true)
         : base(new(), header, GetInputter(items, header, labeler, columns, canCancel))
         {
-            _option = new Option<ListWithSelection<(TItem, bool)>>(
+            _option = new CustomOption<ListWithSelection<(TItem, bool)>>(
                 null,
                 x => true,
                 (x, c) =>
@@ -61,10 +63,7 @@ namespace WebShot.Menus
             int columns = 1,
             bool canCancel = true)
         {
-            ToggleMenuInputter<TItem> inputter = new ToggleMenuInputter<TItem>(
-                items,
-                header,
-                labeler)
+            ToggleMenuInputter<TItem> inputter = new(items, header, labeler)
             {
                 ColumnCount = columns,
                 CanCancel = canCancel,

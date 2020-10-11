@@ -1,8 +1,7 @@
 ﻿using System;
 
-namespace WebShot.Menus
+namespace WebShot.Menu
 {
-
     /// <summary>
     /// Throw this before processing begins if a command matches an option pattern, but is somehow invalid.
     /// User should be safe to continue and retry input.

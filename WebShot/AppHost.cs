@@ -4,10 +4,12 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
-using WebShot.Menus;
+using WebShot.Menu;
 using WebshotService.Entities;
 using WebshotService.State.Store;
-using WebShot.Menus.ColoredConsole;
+using WebShot.Menu.ColoredConsole;
+using WebShot.Menu.Menus;
+using WebShot.Menu.Options;
 
 namespace WebShot
 {

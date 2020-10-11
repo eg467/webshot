@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using WebShot.Menu.Menus;
+using WebShot.Menu.Options;
 
-namespace WebShot.Menus
+namespace WebShot.Menu
 {
     public sealed class MenuNavigator
     {

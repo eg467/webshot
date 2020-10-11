@@ -2,15 +2,16 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using WebShot.Menus.ColoredConsole;
+using WebShot.Menu.ColoredConsole;
+using WebShot.Menu.Options;
 
-namespace WebShot.Menus
+namespace WebShot.Menu.Menus
 {
     public partial class SelectionMenu<TItem> : Menu<ListWithSelection<TItem>>
     {
         public int Columns { get; set; }
 
-        private readonly Option<ListWithSelection<TItem>> _option;
+        private readonly CustomOption<ListWithSelection<TItem>> _option;
 
         public SelectionMenu(
             ColoredOutput header,
@@ -25,7 +26,7 @@ namespace WebShot.Menus
               header,
               GetInputter(items, header, labeler))
         {
-            _option = new Option<ListWithSelection<TItem>>(
+            _option = new CustomOption<ListWithSelection<TItem>>(
                 null,
                 x => true,
                 (x, c) =>
