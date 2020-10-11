@@ -33,7 +33,7 @@ namespace WebShot.Menus
             CompletionHandler? completionHandler,
             int columns = 1,
             bool canCancel = true)
-        : base(new(), header, GetInputter(items, header, labeler))
+        : base(new(), header, GetInputter(items, header, labeler, columns, canCancel))
         {
             _option = new Option<ListWithSelection<(TItem, bool)>>(
                 null,

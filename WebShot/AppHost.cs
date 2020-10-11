@@ -49,7 +49,7 @@ namespace WebShot
             var options = new List<IMenuOption<string>>{
                 new ConsoleMenuOption("Ping", "Enter 'ping' to see 'pong'.", "ping", (m,_)=> { Console.WriteLine("Pong"); return Task.CompletedTask; }),
                 new ConsoleMenuOption("Simpsons", "Choose a Simpson.", "simpsons", null, OptionCompletionHandlers.FromMenuCreator(SimpsonsMenu)),
-                new ConsoleMenuOption("ManySimpsons", "Choose Several Simpsons.", "manysimpsons", null, OptionCompletionHandlers.FromMenuCreator(ManySimpsonsMenu)),
+                new ConsoleMenuOption("ManySimpsons", "Choose Several Simpsons.", "ms|manysimpsons", null, OptionCompletionHandlers.FromMenuCreator(ManySimpsonsMenu)),
             };
 
             var menu = new ConsoleMenu(

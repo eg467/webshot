@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using WebShot.Menus.ColoredConsole;
-using WebshotService.State.Actions.RecentProjectsActions;
 
 namespace WebShot.Menus
 {
@@ -113,7 +112,7 @@ namespace WebShot.Menus
 
             const int startX = 15;
             const int startY = 5;
-            const int spacingPerLine = 5;
+            const int spacingPerLine = 14;
             ConsoleKey key;
             Console.CursorVisible = false;
             var cancelled = false;
@@ -186,8 +185,9 @@ namespace WebShot.Menus
                     }
                 case ConsoleKey.DownArrow:
                     {
-                        if (SelectedIndex + ColumnCount < Items.Count)
-                            SelectedIndex += ColumnCount;
+                        var newIndex = Math.Min(Items.Count - 1, SelectedIndex + ColumnCount);
+                        if (newIndex / ColumnCount > SelectedIndex / ColumnCount)
+                            SelectedIndex = newIndex;
                         break;
                     }
                 default:
