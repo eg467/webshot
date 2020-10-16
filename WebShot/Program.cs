@@ -11,6 +11,7 @@ using WebShot;
 using WebshotService;
 using WebshotService.Entities;
 using WebshotService.ProjectStore;
+using WebshotService.State.Reducers;
 using WebshotService.State.Store;
 
 namespace Webshot
@@ -28,7 +29,9 @@ namespace Webshot
 
             using (provider as IDisposable)
             {
-                config.GetSection("ApplicationState").Value = JsonConvert.SerializeObject(new ApplicationState());
+                // Force instantiation of singleton to watch for store changes.
+                _ = provider.GetService<StoreWatcher>();
+
                 var host = provider.GetService<AppHost>();
                 await host!.RunAsync();
             }
@@ -37,24 +40,25 @@ namespace Webshot
         private static IServiceProvider BuildDi(IConfiguration config)
         {
             return new ServiceCollection()
-                .AddSingleton<IProjectStoreFactory, FileProjectStoreFactory>()
-                .AddSingleton<IObjectStore<ApplicationState>>(p => new FileStore<ApplicationState>("ApplicationState.json"))
-                .AddTransient<AppHost, AppHost>()
+                 .AddLogging(loggingBuilder =>
+                 {
+                     loggingBuilder
+                         .ClearProviders()
+                         .SetMinimumLevel(LogLevel.Information)
+                         .AddNLog("NLog.config");
+                 })
+                .AddSingleton<FileProjectStoreFactory, FileProjectStoreFactory>()
+                .AddSingleton<IProjectStoreFactory>(p => p.GetService<FileProjectStoreFactory>()!)
+                .AddSingleton<IObjectStore<ApplicationState>>(_ => new FileStore<ApplicationState>("ApplicationState.json"))
+                .AddSingleton<AppHost, AppHost>()
                 .AddSingleton<IStore<ApplicationState>>(p =>
                 {
                     var store = p.GetService<IObjectStore<ApplicationState>>();
                     ApplicationState initial = store?.Exists == true ? store.Load() : new();
-                    return new Store<ApplicationState>(WebshotService.State.Reducers.Reducers.ApplicationReducer, initial);
+                    return new Store<ApplicationState>(Reducers.ApplicationReducer, initial);
                 })
-                .AddSingleton<ApplicationStateMachine>()
+                .AddSingleton<ApplicationStore>()
                 .AddSingleton<StoreWatcher>()
-                .AddLogging(loggingBuilder =>
-                {
-                    loggingBuilder
-                        .ClearProviders()
-                        .SetMinimumLevel(LogLevel.Trace)
-                        .AddNLog(config);
-                })
                 .BuildServiceProvider();
         }
     }

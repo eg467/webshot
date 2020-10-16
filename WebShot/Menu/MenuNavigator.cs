@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using WebShot.Menu.ColoredConsole;
 using WebShot.Menu.Menus;
 using WebShot.Menu.Options;
 
@@ -15,10 +16,23 @@ namespace WebShot.Menu
 
         public async Task ExecuteCurrentMenu()
         {
-            MenuCreator menuCreator = _stack.Peek();
-            IMenu menu = menuCreator();
-            CompletionHandler completion = await menu.DisplayAsync();
-            await completion(this);
+            do
+            {
+                //try
+                //{
+                    MenuCreator menuCreator = _stack.Peek();
+                    IMenu menu = menuCreator();
+                    CompletionHandler completion = await menu.DisplayAsync();
+                    await completion(this);
+                    return;
+                //}
+                //catch (Exception ex)
+                //{
+                //    ColoredOutput.Error(ex.Message).WriteLine();
+                //    ColoredOutput.WriteLine("Restarting Menu");
+                //    await ExecuteCurrentMenu();
+                //}
+            } while (true);
         }
 
         public Task DisplayNew(MenuCreator m)
@@ -51,12 +65,10 @@ namespace WebShot.Menu
             return ExecuteCurrentMenu();
         }
 
-        public Task Root()
+        public Task ToRoot()
         {
             while (_stack.Count > 1)
-            {
                 _stack.Pop();
-            }
             return ExecuteCurrentMenu();
         }
     }

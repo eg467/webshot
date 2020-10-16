@@ -16,7 +16,7 @@ namespace WebShot.Menu.Options
         /// <summary>
         /// Creates a user prompt to notify the user about the option and how to select it.
         /// </summary>
-        IOutput? Prompt();
+        IOutput? Prompt { get; }
     }
 
     public delegate Task CompletionHandler(MenuNavigator navigator);

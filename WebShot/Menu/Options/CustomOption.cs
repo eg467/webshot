@@ -1,76 +1,42 @@
 ﻿using System;
+using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
 using WebShot.Menu.ColoredConsole;
 
 namespace WebShot.Menu.Options
 {
-    internal class CustomOption<TInput> : IMenuOption<TInput>
+    public class CustomOption<TInput> : Option<TInput>
     {
         private readonly IOutput? _prompt;
-        private readonly Func<TInput, bool> _isMatch;
-        private readonly Func<TInput, ICompletionHandler, Task> _handler;
-        public CompletionHandler CompletionHandler { get; set; }
+        private readonly Predicate<TInput> _matcher;
+        private readonly AsyncOptionHandler<TInput> _handler;
 
         public CustomOption(
             IOutput? prompt,
-            Func<TInput, bool> isMatch,
-            Func<TInput, ICompletionHandler, Task> handler,
+            Predicate<TInput> isMatch,
+            AsyncOptionHandler<TInput> handler,
             CompletionHandler? completionHandler = null)
         {
             _prompt = prompt;
-            _isMatch = isMatch;
+            _matcher = isMatch;
             _handler = handler;
-            CompletionHandler = completionHandler ?? OptionCompletionHandlers.Back;
+            CompletionHandler = completionHandler ?? CompletionHandlers.Back;
         }
 
-        public async Task<bool> Execute(TInput input)
-        {
-            if (!_isMatch(input))
-                return false;
-            await _handler(input, this);
-            return true;
-        }
+        public override IOutput? Prompt => _prompt;
 
-        public IOutput? Prompt() => _prompt;
+        protected override Task Handler(TInput input) => _handler(input, this);
+
+        protected override bool IsMatch(TInput input) => _matcher(input);
     }
 
-    public class OptionPrompt : IOutput
+    public delegate Task AsyncOptionHandler<TInput>(TInput input, ICompletionHandler completionHandler);
+
+    public delegate void OptionHandler<TInput>(TInput input, ICompletionHandler completionHandler);
+
+    public static class OptionHandlerExtensions
     {
-        public ColoredOutput Descriptor { get; set; } = new ColoredOutput("", ConsoleColor.Cyan);
-        public ColoredOutput Explanation { get; set; } = new ColoredOutput("", ConsoleColor.Gray);
-
-        public OptionPrompt(ColoredOutput descriptor, ColoredOutput explanation)
-        {
-            Descriptor = descriptor;
-            Explanation = explanation;
-        }
-
-        public OptionPrompt(string descriptor, string explanation)
-        {
-            Descriptor.Text = descriptor;
-            Explanation.Text = explanation;
-        }
-
-        private IOutput CombinedOutput
-        {
-            get
-            {
-                var hasDesc = Descriptor.Length > 0;
-                var hasExp = Explanation.Length > 0;
-
-                MixedOutput m = new MixedOutput();
-                if (hasDesc)
-                    m.Add(Descriptor!);
-
-                if (hasExp)
-                    m.Add(hasDesc ? Explanation!.FormatLines(") {0}") : Explanation!);
-
-                return m;
-            }
-        }
-
-        public void Write() => CombinedOutput.Write();
-
-        public void WriteLine() => CombinedOutput.WriteLine();
+        public static AsyncOptionHandler<TInput> ToAsync<TInput>(this OptionHandler<TInput> handler) =>
+            (input, completionHandler) => { handler(input, completionHandler); return Task.CompletedTask; };
     }
 }

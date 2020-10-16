@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Text;
 using System.IO;
 using System.Linq;
 using WebshotService.Entities;
@@ -31,15 +32,27 @@ namespace WebshotService.ProjectStore
         private FileSessionStore CreateSessionStore(string? session = null) =>
             new FileSessionStore(ScreenshotDir, session);
 
-        public FileProjectStore(string projectDir)
+        /// <summary>
+        ///
+        /// </summary>
+        /// <param name="filePath">The path of the project file <see cref="ProjectFilename"/> or an existing directory that does or should contain it.</param>
+        /// <exception cref="ArgumentException"></exception>
+        public FileProjectStore(string filePath)
         {
-            if (projectDir.Contains(ProjectFilename) || File.Exists(projectDir))
+            if (Directory.Exists(filePath))
             {
-                projectDir = Path.GetDirectoryName(projectDir) ?? throw new DirectoryNotFoundException();
+                filePath = Path.Combine(filePath, ProjectFilename);
             }
-            Directory.CreateDirectory(projectDir);
+            else if (!filePath.EndsWith(ProjectFilename, StringComparison.Ordinal))
+            {
+                throw new ArgumentException($"A directory can only have one project named {ProjectFilename}");
+            }
+            else
+            {
+                string projectDir = Path.GetDirectoryName(filePath) ?? throw new DirectoryNotFoundException();
+                Directory.CreateDirectory(projectDir);
+            }
 
-            var filePath = Path.Combine(projectDir, ProjectFilename);
             _filestore = new FileStore<Project>(filePath);
         }
 
@@ -67,18 +80,23 @@ namespace WebshotService.ProjectStore
             return path;
         }
 
-        private Project CreateProject()
-        {
-            Project project = new() { Id = Id };
-            Save(project);
-            return project;
-        }
-
         /// <summary>
         /// Loads a project or creates a new one if it doesn't exist.
         /// </summary>
         /// <returns></returns>
-        public Project Load() => Exists ? _filestore.Load() : CreateProject();
+        public Project Load()
+        {
+            Project project = Exists ? _filestore.Load() : new();
+
+            // The actual file path of the current project file takes precedence over whatever the saved path is.
+            if (!Id.Equals(project.Id, StringComparison.Ordinal))
+            {
+                project = project with { Id = Id };
+                Save(project);
+            }
+
+            return project;
+        }
 
         public void Save(Project project)
         {
@@ -123,7 +141,9 @@ namespace WebshotService.ProjectStore
         private FileStore<ScreenshotResults> ManifestStore => new(ManifestPath);
 
         public static IEnumerable<FileSessionStore> FromDirectory(string baseDir) =>
-            Directory.GetDirectories(baseDir).Select(Load);
+            Directory.Exists(baseDir) 
+                ? Directory.GetDirectories(baseDir).Select(Load) 
+                : Enumerable.Empty<FileSessionStore>();
 
         /// <summary>
         /// Loads a store from an existing session.
@@ -166,8 +186,10 @@ namespace WebshotService.ProjectStore
 
     public class FileProjectStoreFactory : IProjectStoreFactory
     {
-        public IProjectStore Create(string projectId) =>
-            new FileProjectStore(projectId);
+        public IProjectStore Create(string projectId)
+        {
+            return new FileProjectStore(projectId);
+        }
     }
 
     public interface IProjectStoreFactory

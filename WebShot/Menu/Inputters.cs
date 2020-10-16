@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using WebShot.Menu.ColoredConsole;
 
 namespace WebShot.Menu
 {
@@ -13,15 +14,13 @@ namespace WebShot.Menu
         public static Inputter<TInput> FromValue<TInput>(TInput value) =>
             () => value;
 
-        public static Inputter<string> ConsolePrompt(string prompt)
+        public static Inputter<string> ConsolePrompt(IOutput? prompt)
         {
             return () =>
             {
-                Console.WriteLine(prompt);
-                string? result = null;
-                while (result is null)
-                    result = Console.ReadLine();
-                return result;
+                prompt?.WriteLine();
+                return Console.ReadLine()?.Trim()
+                    ?? throw new InvalidOperationException("No input detected.");
             };
         }
     }

@@ -10,25 +10,28 @@ using System.Threading;
 using System.Linq;
 using WebshotService.Screenshotter;
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
 
 namespace WebshotService.State.Store
 {
     /// <summary>
-    /// Facade for redux store and screenshotting tools
+    /// Facade for the redux store and screenshotting tools.
     /// </summary>
-    public class ApplicationStateMachine : IDisposable, IObservable<ApplicationState>
+    public sealed class ApplicationStore : IDisposable, IObservable<ApplicationState>
     {
         public ApplicationState State => _store.GetState();
+
+        private readonly ILogger _logger;
+        private readonly ILoggerFactory _loggerFactory;
         private readonly IStore<ApplicationState> _store;
         private readonly IProjectStoreFactory _projectStoreFactory;
-        private readonly IProgress<TaskProgress> _progress;
 
-        public ApplicationStateMachine(IObjectStore<ApplicationState> initialStateStore, IProjectStoreFactory projectStoreFactory)
+        public ApplicationStore(IStore<ApplicationState> store, IProjectStoreFactory projectStoreFactory, ILoggerFactory loggerFactory)
         {
-            var initialState = initialStateStore.Exists ? initialStateStore.Load() : new();
-            _store = new Store<ApplicationState>(Reducers.Reducers.ApplicationReducer, initialState);
+            _store = store;
             _projectStoreFactory = projectStoreFactory;
-            _progress = new Progress<TaskProgress>(SetProgress);
+            _loggerFactory = loggerFactory;
+            _logger = loggerFactory.CreateLogger<ApplicationStore>();
         }
 
         public void SetState(ApplicationState state)
@@ -51,8 +54,9 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ApplicationActions.SetIsCrawlingSite(status));
         }
 
-        public void SetCurrentProject(IProjectStore projectStore)
+        public void SetCurrentProject(string id)
         {
+            IProjectStore projectStore = _projectStoreFactory.Create(id);
             _store.Dispatch(ActionCreators.LoadProject(projectStore));
         }
 
@@ -66,7 +70,7 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ApplicationActions.SetProgress(currentProgress));
         }
 
-        public async Task RunSpider(CancellationToken? token = null)
+        public async Task RunSpider(CancellationToken? token = null, IProgress<TaskProgress>? progress = null)
         {
             var options = State.CurrentProject?.Options;
             if (options is null)
@@ -74,10 +78,11 @@ namespace WebshotService.State.Store
                 throw new InvalidOperationException("No project is loaded.");
             }
             _store.Dispatch(new Actions.ApplicationActions.SetIsCrawlingSite(true));
-            Spider.Spider spider = new(options.SpiderOptions, options.Credentials);
+            var spiderLogger = _loggerFactory.CreateLogger<Spider.Spider>();
+            Spider.Spider spider = new(options.SpiderOptions, options.Credentials, spiderLogger);
             var results = token is not null
-                ? await spider.Crawl(token.Value, _progress)
-                : await spider.Crawl(_progress);
+                ? await spider.Crawl(token.Value, progress)
+                : await spider.Crawl(progress);
 
             SetSpiderResults(results);
             Dictionary<Uri, bool> newTargets = results.SitePages.ToDictionary(u => u, _ => true);
@@ -98,7 +103,7 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.ToggleTargetPageEnabled(uri, enabled));
         }
 
-        public async Task RunScreenshotter(CancellationToken? token)
+        public async Task RunScreenshotter(CancellationToken? token, IProgress<TaskProgress>? progress = null)
         {
             if (State.CurrentProject is null)
             {
@@ -107,7 +112,7 @@ namespace WebshotService.State.Store
             var projectStore = _projectStoreFactory.Create(State.CurrentProject.Id);
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(true));
             var screenshotter = new ProjectScreenshotter(projectStore);
-            await screenshotter.TakeScreenshotsAsync(token, _progress);
+            await screenshotter.TakeScreenshotsAsync(token, progress);
 
             var projectResults = projectStore?.GetResultsBySessionId() ?? new();
 

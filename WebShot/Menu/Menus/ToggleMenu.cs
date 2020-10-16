@@ -16,39 +16,33 @@ namespace WebShot.Menu.Menus
         private readonly CustomOption<ListWithSelection<(TItem, bool)>> _option;
 
         public ToggleMenu(
-            ColoredOutput header,
+            string header,
+             IOutput? description,
             IEnumerable<TItem> items,
             Func<TItem, string>? labeler,
-            Func<ListWithSelection<(TItem, bool)>, ICompletionHandler, Task> handler,
+            AsyncOptionHandler<ListWithSelection<(TItem, bool)>> handler,
             CompletionHandler? completionHandler,
             int columns = 1,
             bool canCancel = true)
-        : this(header, SelectAll(items), labeler, handler, completionHandler, columns, canCancel)
+        : this(header, description, SelectAll(items), labeler, handler, completionHandler, columns, canCancel)
         {
         }
 
         public ToggleMenu(
-            ColoredOutput header,
+            string header,
+            IOutput? description,
             IEnumerable<(TItem, bool)> items,
             Func<TItem, string>? labeler,
-            Func<ListWithSelection<(TItem, bool)>, ICompletionHandler, Task> handler,
+            AsyncOptionHandler<ListWithSelection<(TItem, bool)>> handler,
             CompletionHandler? completionHandler,
             int columns = 1,
             bool canCancel = true)
-        : base(new(), header, GetInputter(items, header, labeler, columns, canCancel))
+        : base(new(), header, description, GetInputter(items, header, labeler, columns, canCancel))
         {
             _option = new CustomOption<ListWithSelection<(TItem, bool)>>(
                 null,
                 x => true,
-                (x, c) =>
-                {
-                    if (x.SelectedIndex == -1)
-                    {
-                        c.CompletionHandler = OptionCompletionHandlers.Back;
-                        return Task.CompletedTask;
-                    }
-                    return handler(x, c);
-                },
+                handler.IfSelected(),
                 completionHandler);
             AddOption(_option);
         }
@@ -58,7 +52,7 @@ namespace WebShot.Menu.Menus
 
         private static Inputter<ListWithSelection<(TItem, bool)>> GetInputter(
             IEnumerable<(TItem, bool)> items,
-            IOutput header,
+            string header,
             Func<TItem, string>? labeler,
             int columns = 1,
             bool canCancel = true)
@@ -85,12 +79,13 @@ namespace WebShot.Menu.Menus
         /// <param name="labeler">A function that converts a list element to a string label, null to use <see cref="TItem.ToString()"/></param>.
         public ToggleMenuInputter(
             IEnumerable<(TItem, bool)> items,
-            IOutput header,
+            string header,
             Func<TItem, string>? labeler = null)
         : base(
-            items,
-            header,
-            labeler is object ? (x => labeler(x.Item)) : null)
+            items: items,
+            header: header,
+            description: null,
+            labeler: labeler is object ? (x => labeler(x.Item)) : null)
         {
         }
 

@@ -14,8 +14,8 @@ namespace WebshotService.Entities
         {
             var builder = ImmutableDictionary.CreateBuilder<Device, DeviceScreenshotOptions>();
             builder.Add(Device.Desktop, new DeviceScreenshotOptions(Device.Desktop, 1920));
-            builder.Add(Device.Desktop, new DeviceScreenshotOptions(Device.Mobile, 480));
-            builder.Add(Device.Desktop, new DeviceScreenshotOptions(Device.Tablet, 768));
+            builder.Add(Device.Mobile, new DeviceScreenshotOptions(Device.Mobile, 480));
+            builder.Add(Device.Tablet, new DeviceScreenshotOptions(Device.Tablet, 768));
             DeviceOptions = builder.ToImmutable();
         }
     }

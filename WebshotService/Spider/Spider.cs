@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Diagnostics;
@@ -17,10 +18,12 @@ namespace WebshotService.Spider
         private readonly LinkTracker _linkTracker = new LinkTracker();
         private readonly SpiderOptions _options;
         private readonly List<IUriCrawlValidator> _uriCrawlValidators = new List<IUriCrawlValidator>();
+        private readonly ILogger _logger;
 
-        public Spider(SpiderOptions options, ProjectCredentials creds)
+        public Spider(SpiderOptions options, ProjectCredentials creds, ILogger logger)
         {
             _options = options;
+            _logger = logger;
 
             SetHttpClientCredentials(creds);
             ConfigureUriCrawlValidators();
@@ -68,12 +71,10 @@ namespace WebshotService.Spider
 
             while (_linkTracker.TryNextUnvisited(out StandardizedUri? unvisited))
             {
-                Debug.WriteLine($"Parsing {unvisited!.Standardized.AbsoluteUri}");
+                _logger.LogDebug("Parsing {0}", unvisited!.Standardized.AbsoluteUri);
 
                 if (token.IsCancellationRequested)
-                {
                     throw new TaskCanceledException();
-                }
 
                 var currentProgress = new TaskProgress(
                     _linkTracker.Count(u => u.Status != SpiderPageStatus.Unvisited),
@@ -105,7 +106,7 @@ namespace WebshotService.Spider
             {
                 sources.Status = SpiderPageStatus.Error;
                 sources.Error = ex.Message;
-                Debug.WriteLine($"Error downloading page ({uri}): {ex.Message}");
+                _logger.LogWarning(ex, "Error downloading page ({0}): {1}", uri.Standardized, ex.Message);
             }
 
             if (sources.Status != SpiderPageStatus.Unvisited) return;
@@ -135,9 +136,9 @@ namespace WebshotService.Spider
             {
                 return ValidateUri(uri);
             }
-            catch (UriFormatException e)
+            catch (UriFormatException ex)
             {
-                Debug.WriteLine($"Error parsing URI ({uri}): {e.Message}");
+                _logger.LogWarning(ex, "Error parsing URI ({0}): {1}", uri.AbsoluteUri, ex.Message);
                 return false;
             }
         }

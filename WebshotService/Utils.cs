@@ -12,6 +12,9 @@ namespace WebshotService
 {
     public static class Utils
     {
+        public static string FormattedSerialize(object obj) =>
+            JsonConvert.SerializeObject(obj, Formatting.Indented);
+
         public static string SanitizeFilename(string filename)
         {
             var sanitized = Regex.Replace(filename, "[^-a-zA-Z0-9]+", "_");

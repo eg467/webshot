@@ -16,10 +16,6 @@ namespace WebshotService.State.Actions
                     CloseProject();
                     return;
                 }
-                if (!projectStore.Exists)
-                {
-                    throw new InvalidOperationException($"The project ({projectStore.Id}) does not exist");
-                }
 
                 var project = projectStore.Load();
 
@@ -28,7 +24,7 @@ namespace WebshotService.State.Actions
                 var projectResults = projectStore?.GetResultsBySessionId() ?? new();
                 dispatch(new ProjectActions.SetProjectResults(projectResults.ToImmutableArray()));
 
-                dispatch(new RecentProjectsActions.Add(project.Id, $"{project.Name} ({project.Id})"));
+                dispatch(new RecentProjectsActions.Add(project.Id, project.Name));
             };
 
         public static ActionCreator<ApplicationState> CloseProject() =>

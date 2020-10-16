@@ -17,7 +17,7 @@ namespace WebShot.Menu.Menus
 
         public static void PressKeyToContinue()
         {
-            new ColoredOutput("Press any key to continue...").WriteLine();
+            Console.WriteLine("Press any key to continue...");
             _ = Console.ReadKey();
         }
     }
@@ -26,8 +26,10 @@ namespace WebShot.Menu.Menus
     {
         public ConsoleMenu(
             List<IMenuOption<string>> options,
+            string header,
             IOutput description,
-            Inputter<string> inputGetter) : base(options, description, inputGetter)
+            Inputter<string> inputGetter)
+            : base(options, header, description, inputGetter)
         {
         }
     }
@@ -35,53 +37,66 @@ namespace WebShot.Menu.Menus
     public class Menu<TInput> : IMenu
     {
         protected readonly List<IMenuOption<TInput>> _options;
+        private readonly string _header;
         private readonly IOutput _description;
         private readonly Inputter<TInput> _inputGetter;
 
         public CompletionHandler CompletionHandler { get; set; } =
-            OptionCompletionHandlers.Back;
-
-        private readonly ConsoleColor _optionColor = ConsoleColor.Yellow;
+            CompletionHandlers.Back;
 
         public Menu(
             List<IMenuOption<TInput>> options,
-            IOutput description,
+            string header,
+            IOutput? description,
             Inputter<TInput> inputGetter)
         {
             _options = options;
-            _description = description;
+            _header = header;
+            _description = description ?? ColoredOutput.Empty;
             _inputGetter = inputGetter;
         }
 
         public async Task<CompletionHandler> DisplayAsync()
         {
-            string headerLine = "-----------------";
+            ConsoleColor menuColor = ConsoleColor.Yellow;
             while (true)
             {
-                ColoredOutput.Multiline(ConsoleColor.Green, null, Enumerable.Repeat(headerLine, 3)).WriteLine();
+                DisplayHeader();
+                DisplayDescription();
+                DisplayOptionPrompts();
 
-                _description.WriteLine();
-
-                var optionPrompts = _options.Select(o => o.Prompt()).Where(x => x is not null);
-                if (optionPrompts.Any())
-                {
-                    ColoredOutput.Multiline(_optionColor, null, "", "Options", headerLine).WriteLine();
-                    optionPrompts.ForEach(x => x?.WriteLine());
-                }
-
-                var input = _inputGetter();
+                TInput input = _inputGetter();
 
                 try
                 {
-                    var option = await ExecuteFirstMatchingOption(input);
-                    if (option is not null) return option.CompletionHandler;
+                    IMenuOption<TInput>? option = await ExecuteFirstMatchingOption(input);
+                    if (option is not null)
+                        return option.CompletionHandler;
 
+                    // No option was matched.
                     DefaultMenuLines.InvalidResponse.WriteLine();
                 }
                 catch (MenuInputException ex)
                 {
                     ColoredOutput.Error(ex.Message).WriteLine();
                 }
+            }
+
+            // HELPER FUNCTIONS
+
+            void DisplayHeader()
+            {
+                ColoredOutput headerOutput = new(_header, menuColor);
+                headerOutput.PrintHeader();
+            }
+
+            void DisplayDescription() => _description.WriteLine();
+
+            void DisplayOptionPrompts()
+            {
+                ColoredOutput headerOutput = new("Options", menuColor);
+                headerOutput.PrintHeader(hBorder: 3, borderChar: '-', hPadding: 2, vPadding: 0);
+                _options.ForEach(o => o.Prompt?.WriteLine());
             }
 
             // Executes the handler for the first matching option and returns it.
@@ -118,17 +133,21 @@ namespace WebShot.Menu.Menus
             if (!isRoot)
             {
                 if (options.HasFlag(NavigationOptions.Back))
-                    menu.AddOption(new ConsoleMenuOption("Back", "Return to the previous menu", "back", completionHandler: OptionCompletionHandlers.Back));
+                    menu.AddOption(new ConsoleOption(
+                        new OptionPrompt("Back", "Return to the previous menu"),
+                        completionHandler: CompletionHandlers.Back));
 
                 if (options.HasFlag(NavigationOptions.Root))
-                    menu.AddOption(new ConsoleMenuOption("Root", "Return to the main menu", "root", completionHandler: OptionCompletionHandlers.Root));
+                    menu.AddOption(new ConsoleOption(
+                        new OptionPrompt("Root", "Return to the main menu"),
+                        completionHandler: CompletionHandlers.Root));
             }
 
-            if (options.HasFlag(NavigationOptions.Reload))
-                menu.AddOption(new ConsoleMenuOption("Reset", "Reset Menu", "reset", completionHandler: OptionCompletionHandlers.Repeat));
-
             if (options.HasFlag(NavigationOptions.Exit))
-                menu.AddOption(new ConsoleMenuOption("Exit/Quit", "Exit Application", "exit|quit", completionHandler: OptionCompletionHandlers.Exit));
+                menu.AddOption(new ConsoleOption(
+                    new OptionPrompt("'Exit' or 'Quit'", "Exit the application"),
+                    matcher: new RegexOptionMatcher(/* language=regex */ @"exit|quit"),
+                    completionHandler: _ => Task.CompletedTask /* CompletionHandlers.Exit*/));
         }
     }
 

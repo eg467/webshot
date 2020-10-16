@@ -4,13 +4,13 @@ namespace WebshotService
 {
     public record TaskProgress
     {
-        public int CurrentIndex { get; init; }
+        public int Index { get; init; }
         public int Count { get; init; }
         public string CurrentItem { get; init; }
 
         public TaskProgress(int currentIndex, int count, string currentItem)
         {
-            this.CurrentIndex = currentIndex;
+            this.Index = currentIndex;
             this.Count = count;
             this.CurrentItem = currentItem;
         }

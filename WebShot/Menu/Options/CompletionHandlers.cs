@@ -4,7 +4,7 @@ using WebShot.Menu.Menus;
 
 namespace WebShot.Menu.Options
 {
-    public static class OptionCompletionHandlers
+    public static class CompletionHandlers
     {
         public static Task Back(MenuNavigator nav) => nav.Back();
 
@@ -16,7 +16,7 @@ namespace WebShot.Menu.Options
 
         public static Task Repeat(MenuNavigator nav) => nav.ExecuteCurrentMenu();
 
-        public static Task Root(MenuNavigator nav) => nav.Root();
+        public static Task Root(MenuNavigator nav) => nav.ToRoot();
 
         public static Task Exit(MenuNavigator _)
         {

@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
-using System.Runtime.InteropServices.ComTypes;
 using System.Threading.Tasks;
 using WebShot.Menu;
 using WebshotService.Entities;
@@ -10,61 +9,220 @@ using WebshotService.State.Store;
 using WebShot.Menu.ColoredConsole;
 using WebShot.Menu.Menus;
 using WebShot.Menu.Options;
+using System.Diagnostics;
+using System.Text.RegularExpressions;
+using System.IO;
+using System.Threading;
+using Newtonsoft.Json;
+using WebshotService.ProjectStore;
+using System.Diagnostics.CodeAnalysis;
+using System.Collections.Immutable;
+using static WebShot.Menu.Menus.StringValidator;
+using WebshotService;
+using Microsoft.Extensions.Logging;
 
 namespace WebShot
 {
     public class AppHost
     {
-        private readonly ApplicationStateMachine _appState;
-        private readonly AppMenus _menus;
-        private readonly MenuNavigator _menuNav = new();
+        private readonly ApplicationStore _appState;
 
-        public AppHost(ApplicationStateMachine appState)
+        private ApplicationState State => _appState.State;
+
+        private readonly ILogger<AppHost> _logger;
+
+        /// <summary>
+        /// The currently opened project. This will be non-null outside of the root/non-project menus.
+        /// </summary>
+        private Project CurrentProject => State.CurrentProject!;
+
+        private readonly MenuNavigator _menuNav = new();
+        private readonly FileProjectStoreFactory _projectStoreFactory;
+
+        private bool IsRoot => _menuNav.Count == 1;
+
+        public AppHost(ApplicationStore appState, FileProjectStoreFactory projectStoreFactory, ILogger<AppHost> logger)
         {
             _appState = appState;
-            _menus = new AppMenus(_appState, () => _menuNav.Count == 1);
-
+            _projectStoreFactory = projectStoreFactory;
             _menuNav.Exited += (s, e) => Environment.Exit(0);
+            _logger = logger;
         }
 
         public Task RunAsync()
         {
-            return _menuNav.DisplayNew(_menus.MainMenu);
-        }
-    }
-
-    public class AppMenus
-    {
-        private readonly ApplicationStateMachine _appState;
-        private readonly Func<bool> _isRoot;
-
-        private ApplicationState State => _appState.State;
-
-        public AppMenus(ApplicationStateMachine appState, Func<bool> isRoot)
-        {
-            _appState = appState;
-            _isRoot = isRoot;
+            return _menuNav.DisplayNew(MainMenu);
         }
 
-        public Menu<string> MainMenu()
+        private void LoadProject(string path)
         {
-            var options = new List<IMenuOption<string>>{
-                new ConsoleMenuOption("Ping", "Enter 'ping' to see 'pong'.", "ping", (m,_)=> { Console.WriteLine("Pong"); return Task.CompletedTask; }),
-                new ConsoleMenuOption("Simpsons", "Choose a Simpson.", "simpsons", null, OptionCompletionHandlers.FromMenuCreator(SimpsonsMenu)),
-                new ConsoleMenuOption("ManySimpsons", "Choose Several Simpsons.", "ms|manysimpsons", null, OptionCompletionHandlers.FromMenuCreator(ManySimpsonsMenu)),
-            };
+            if (Directory.Exists(path))
+                path = Path.Combine(path, FileProjectStore.ProjectFilename);
 
-            var menu = new ConsoleMenu(
-                options,
-                new ColoredOutput("Main Menu"),
-                Inputters.ConsolePrompt("Enter Selection:"));
+            _appState.SetCurrentProject(path);
+        }
 
-            menu.AddNavOptions(_isRoot());
+        private void CreateProject(string path)
+        {
+            _appState.SetCurrentProject(path);
+        }
 
+        private void CloseProject()
+        {
+            if (State.CurrentProject is object)
+                _appState.CloseCurrentProject();
+        }
+
+        private void EnsureExists([NotNull] Project? project)
+        {
+            if (project is null)
+                throw new InvalidOperationException("No project is currently loaded.");
+        }
+
+        #region Menus
+
+        public IMenu GenericNavigationMenu(
+            string header,
+            IOutput? description,
+            List<IMenuOption<string>> options)
+        {
+            var prompter = Inputters.ConsolePrompt((ColoredOutput)"Enter Selection:");
+            description ??= ColoredOutput.Empty;
+            var menu = new ConsoleMenu(options, header, description, prompter);
+            menu.AddNavOptions(IsRoot);
             return menu;
         }
 
-        public Menu<ListWithSelection<string>> SimpsonsMenu()
+        public IMenu MainMenu()
+        {
+            CloseProject();
+            var options = new List<IMenuOption<string>>{
+                new ConsoleOption(
+                    new OptionPrompt("Create <Project Directory Path>", "Create a project"),
+                    handler: (m,_) => CreateProject(m.Groups["path"].Value),
+                    matcher: new RegexOptionMatcher("create (?<path>.+)"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Load <Project File or Directory Path>", "Load a project"),
+                    handler: (m,_) => LoadProject(m.Groups["path"].Value),
+                    matcher: new RegexOptionMatcher("load (?<path>.+)"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Recent", "Select a recent project to open"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ChooseRecentProject)),
+            };
+
+            return GenericNavigationMenu("Main Menu", null, options);
+        }
+
+        public IMenu ChooseRecentProject()
+        {
+            return new SelectionMenu<KeyValuePair<string, string>>(
+                "Choose a Recent Project",
+                null,
+                State.RecentProjects.Reverse().Take(10),
+                x => $"{x.Value} ({x.Key})",
+                (r, c) =>
+                {
+                    LoadProject(r.Item.Key);
+                    c.CompletionHandler = CompletionHandlers.FromMenuCreator(ProjectMenu);
+                    return Task.CompletedTask;
+                },
+                CompletionHandlers.Back);
+        }
+
+        public IMenu ProjectMenu()
+        {
+            List<IMenuOption<string>> options = new List<IMenuOption<string>>{
+                new ConsoleOption(
+                    new OptionPrompt("'File' or 'Dir'", "Open project file or directory"),
+                    asyncHandler: Handler,
+                    matcher: new RegexOptionMatcher("file|dir")),
+                new ConsoleOption(
+                    new OptionPrompt("Spider", "Run the spider or set its options"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
+                new ConsoleOption(
+                    new OptionPrompt("Reload", "Reload the current project from the file"),
+                    asyncHandler: Handler)
+            };
+
+            Task Handler(Match m, ICompletionHandler c)
+            {
+                c.CompletionHandler = CompletionHandlers.Repeat;
+
+                var projectPath = CurrentProject.Id;
+
+                switch (m.Value.ToUpper())
+                {
+                    case "FILE":
+                        Process.Start(projectPath);
+                        break;
+
+                    case "DIR":
+                        var dir = Path.GetDirectoryName(projectPath) ?? throw new DirectoryNotFoundException();
+                        Process.Start(dir);
+                        break;
+
+                    case "RELOAD":
+                        LoadProject(projectPath);
+                        break;
+                }
+
+                return Task.CompletedTask;
+            }
+
+            EnsureExists(State.CurrentProject);
+            return GenericNavigationMenu(
+                $"Project: {State.CurrentProject.Name} ({State.CurrentProject?.Id})",
+                null,
+                options);
+        }
+
+        public IMenu SpiderMenu()
+        {
+            ColoredOutput description = Utils.FormattedSerialize(CurrentProject.Options.SpiderOptions);
+
+            List<IMenuOption<string>> options = new List<IMenuOption<string>>{
+                new ConsoleOption(
+                    new OptionPrompt("Run", "run the spider to find all web pages on the site"),
+                    asyncHandler: RunSpiderHandler),
+                new ConsoleOption(
+                    new OptionPrompt("Options", "Set Options"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(SpiderOptionSeedMenu)),
+            };
+
+            async Task RunSpiderHandler(Match _, ICompletionHandler completionHandler)
+            {
+                using CancellableConsoleTask cancellableTask = new();
+                var task = _appState.RunSpider(cancellableTask.Token, cancellableTask.Progress)
+                    /*TODO: REMOVE*/ .ContinueWith(_ => Task.Delay(TimeSpan.FromDays(1)));
+                await cancellableTask.CompleteOrCancel(task);
+            }
+
+            return GenericNavigationMenu("Spider", description, options);
+        }
+
+        public IMenu SpiderOptionSeedMenu()
+        {
+            EnsureExists(State.CurrentProject);
+            var opts = State.CurrentProject.Options.SpiderOptions;
+
+            return new FactoryMenu<SpiderOptions>(
+                "Spider Options Menu",
+                f => new SpiderOptions()
+                {
+                    SeedUris = f.New("Enter Seed URIs").MultilineSelect(lines => lines.Select(l => new Uri(l)).ToImmutableArray(), Maybe.From(opts.SeedUris)),
+                    FollowInternalLinks = f.New("Follow links within the seed domains?").Bool(Maybe.From(opts.FollowInternalLinks)),
+                    FollowExternalLinks = f.New("Follow links to external sites?").Bool(Maybe.From(opts.FollowExternalLinks)),
+                    UriBlacklistPattern = f.New("Pattern to blacklist?", v => v.Custom(new RegexPatternValidator())).Str(Maybe.From(opts.UriBlacklistPattern))
+                },
+                (opt, _) => _appState.SetSpiderOptions(opt),
+                completionHandler: CompletionHandlers.Back);
+        }
+
+        public static IMenu SimpsonsMenu()
         {
             static Task Handler(ListWithSelection<string> r, ICompletionHandler _)
             {
@@ -78,13 +236,14 @@ namespace WebShot
 
             return new SelectionMenu<string>(
                 "Simpsons",
+                (ColoredOutput)"Choose a Simspsons Family Member",
                 simpsonsMembers,
                 x => x,
                 Handler,
-                OptionCompletionHandlers.Back);
+                CompletionHandlers.Back);
         }
 
-        public Menu<ListWithSelection<(string, bool)>> ManySimpsonsMenu()
+        public static IMenu ManySimpsonsMenu()
         {
             static Task Handler(ListWithSelection<(string Item, bool Enabled)> r, ICompletionHandler _)
             {
@@ -105,13 +264,39 @@ namespace WebShot
             var simpsonsMembers = new[] { "Homer", "Marge", "Bart", "Lisa", "Maggie" };
 
             return new ToggleMenu<string>(
-                "Simpsons",
-                simpsonsMembers,
-                x => x,
-                Handler,
-                OptionCompletionHandlers.Back,
+                header: "Simpsons",
+                description: null,
+                items: simpsonsMembers,
+                labeler: x => x,
+                handler: Handler,
+                completionHandler: CompletionHandlers.Back,
                 3,
                 true);
         }
+
+        public static IMenu PeopleMenu()
+        {
+            static Person GetPerson(ConverterFactory f)
+            {
+                return new Person(
+                    Name: f.New("Name", v => v.Length(NumRange.AtLeast(3))).Str(),
+                    Age: f.New("Age").Int(range: NumRange.AtLeast(18)),
+                    BirthDate: f.New("Birthdate (MM/DD/YYYY)", v => v.Regex(@"\d{2}/\d{2}/\d{4}")).Select(s => DateTime.Parse(s, Thread.CurrentThread.CurrentCulture)));
+            }
+
+            static Task Handler(Person person, ICompletionHandler completion)
+            {
+                string serializedPerson = JsonConvert.SerializeObject(person);
+                List<ColoredOutput>? lines = ColoredOutput.ToList(null, null, "You serialized...", serializedPerson);
+                MixedOutput.Vertical(lines).WriteLine();
+                return Task.CompletedTask;
+            }
+
+            return new FactoryMenu<Person>("Make a person", GetPerson, Handler, CompletionHandlers.Back);
+        }
+
+        #endregion Menus
+
+        public record Person(string Name, int Age, DateTime BirthDate);
     }
 }

@@ -9,47 +9,40 @@ namespace WebShot.Menu.Menus
 {
     public partial class SelectionMenu<TItem> : Menu<ListWithSelection<TItem>>
     {
-        public int Columns { get; set; }
-
         private readonly CustomOption<ListWithSelection<TItem>> _option;
 
         public SelectionMenu(
-            ColoredOutput header,
+            string header,
+            IOutput? description,
             IEnumerable<TItem> items,
             Func<TItem, string>? labeler,
-            Func<ListWithSelection<TItem>, ICompletionHandler, Task> handler,
+            AsyncOptionHandler<ListWithSelection<TItem>> handler,
             CompletionHandler? completionHandler,
             int columns = 1,
             bool canCancel = true)
         : base(
               new(),
               header,
-              GetInputter(items, header, labeler))
+              description,
+              GetInputter(items, header, description ?? ColoredOutput.Empty, labeler, columns, canCancel))
         {
             _option = new CustomOption<ListWithSelection<TItem>>(
                 null,
                 x => true,
-                (x, c) =>
-                {
-                    if (x.SelectedIndex == -1)
-                    {
-                        c.CompletionHandler = OptionCompletionHandlers.Back;
-                        return Task.CompletedTask;
-                    }
-                    return handler(x, c);
-                },
+                handler.IfSelected(),
                 completionHandler);
             AddOption(_option);
         }
 
         private static Inputter<ListWithSelection<TItem>> GetInputter(
             IEnumerable<TItem> items,
-            IOutput header,
+            string header,
+            IOutput? description,
             Func<TItem, string>? labeler,
             int columns = 1,
             bool canCancel = true)
         {
-            SelectionMenuInputter<TItem> inputter = new SelectionMenuInputter<TItem>(items, header, labeler)
+            SelectionMenuInputter<TItem> inputter = new SelectionMenuInputter<TItem>(items, header, description, labeler)
             {
                 ColumnCount = columns,
                 CanCancel = canCancel,
@@ -62,7 +55,8 @@ namespace WebShot.Menu.Menus
     public class SelectionMenuInputter<TItem>
     {
         protected readonly List<TItem> Items;
-        protected readonly IOutput _header;
+        protected readonly string _header;
+        protected readonly IOutput? _description;
         public readonly Func<TItem, string> _labeler;
 
         /// <summary>
@@ -73,11 +67,13 @@ namespace WebShot.Menu.Menus
         /// <param name="labeler">A function that converts a list element to a string label, null to use <see cref="TItem.ToString()"/></param>.
         public SelectionMenuInputter(
             IEnumerable<TItem> items,
-            IOutput? header,
+            string? header,
+            IOutput? description,
             Func<TItem, string>? labeler = null)
         {
             Items = items.ToList();
-            _header = header ?? new MixedOutput();
+            _header = header ?? "Menu";
+            _description = description;
             _labeler = x => SafeLabeler(x, labeler);
         }
 
@@ -111,8 +107,8 @@ namespace WebShot.Menu.Menus
         {
             // Adapted From: https://stackoverflow.com/questions/46908148/controlling-menu-with-the-arrow-keys-and-enter
 
-            const int startX = 15;
-            const int startY = 5;
+            var startX = 15;
+            var startY = 0;
             const int spacingPerLine = 14;
             ConsoleKey key;
             Console.CursorVisible = false;
@@ -121,7 +117,7 @@ namespace WebShot.Menu.Menus
 
             if (!Items.Any())
             {
-                _header.WriteLine();
+                ((ColoredOutput)_header).WriteLine();
                 new ColoredOutput("No items are available to select...").WriteLine();
                 DefaultMenuLines.PressKeyToContinue();
                 return new(Items, -1);
@@ -130,9 +126,13 @@ namespace WebShot.Menu.Menus
             do
             {
                 Console.Clear();
+                Console.SetCursorPosition(0, 0);
+                ((ColoredOutput)_header).PrintHeader();
+                _description?.WriteLine();
 
-                Console.SetCursorPosition(startX, 0);
-                _header.WriteLine();
+                (_, startY) = Console.GetCursorPosition();
+                startY += 2;
+                Console.SetCursorPosition(startX, startY);
 
                 for (int i = 0; i < Items.Count; i++)
                 {
@@ -220,5 +220,25 @@ namespace WebShot.Menu.Menus
             SelectedIndex = selectedIndex;
             Items = items;
         }
+    }
+
+    public static class OptionHandlerExtension
+    {
+        /// <summary>
+        /// Only completes the handler if an option was selected and the menu wasn't cancelled.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="handler"></param>
+        /// <returns></returns>
+        public static AsyncOptionHandler<ListWithSelection<T>> IfSelected<T>(this AsyncOptionHandler<ListWithSelection<T>> handler) =>
+            (x, c) =>
+            {
+                if (x.SelectedIndex == -1)
+                {
+                    c.CompletionHandler = CompletionHandlers.Back;
+                    return Task.CompletedTask;
+                }
+                return handler(x, c);
+            };
     }
 }
