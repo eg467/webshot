@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using WebShot.Menu.ColoredConsole;
@@ -11,27 +12,37 @@ namespace WebShot.Menu
     {
         public event EventHandler? Exited;
 
+        private ILogger<MenuNavigator> _logger;
+
+        public MenuNavigator(ILogger<MenuNavigator> logger)
+        {
+            _logger = logger;
+        }
+
         public int Count => _stack.Count;
+        public bool IsRoot => Count == 1;
         private readonly Stack<MenuCreator> _stack = new();
 
         public async Task ExecuteCurrentMenu()
         {
             do
             {
-                //try
-                //{
+                try
+                {
                     MenuCreator menuCreator = _stack.Peek();
                     IMenu menu = menuCreator();
                     CompletionHandler completion = await menu.DisplayAsync();
                     await completion(this);
                     return;
-                //}
-                //catch (Exception ex)
-                //{
-                //    ColoredOutput.Error(ex.Message).WriteLine();
-                //    ColoredOutput.WriteLine("Restarting Menu");
-                //    await ExecuteCurrentMenu();
-                //}
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,  ex.Message);
+                    if (IsRoot)
+                        await ToRoot();
+                    else
+                        await Back();
+                }
             } while (true);
         }
 

@@ -7,6 +7,7 @@ using WebshotService;
 using WebShot.Menu.ColoredConsole;
 using System.Runtime.CompilerServices;
 using WebShot.Menu.Options;
+using Microsoft.Extensions.Logging;
 
 namespace WebShot.Menu.Menus
 {
@@ -40,7 +41,6 @@ namespace WebShot.Menu.Menus
         private readonly string _header;
         private readonly IOutput _description;
         private readonly Inputter<TInput> _inputGetter;
-
         public CompletionHandler CompletionHandler { get; set; } =
             CompletionHandlers.Back;
 

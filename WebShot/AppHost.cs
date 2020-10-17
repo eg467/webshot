@@ -30,15 +30,15 @@ namespace WebShot
 
         private ApplicationState State => _appState.State;
 
+        private readonly ILoggerFactory _loggerFactory;
         private readonly ILogger<AppHost> _logger;
-        private readonly ILogger<Project> _projectLogger;
 
         /// <summary>
         /// The currently opened project. This will be non-null outside of the root/non-project menus.
         /// </summary>
         private Project CurrentProject => State.CurrentProject!;
 
-        private readonly MenuNavigator _menuNav = new();
+        private readonly MenuNavigator _menuNav;
         private readonly FileProjectStoreFactory _projectStoreFactory;
 
         private bool IsRoot => _menuNav.Count == 1;
@@ -46,14 +46,15 @@ namespace WebShot
         public AppHost(
             ApplicationStore appState,
             FileProjectStoreFactory projectStoreFactory,
-            ILogger<AppHost> logger,
-            ILogger<Project> projectLogger)
+            ILoggerFactory loggerFactory)
         {
             _appState = appState;
             _projectStoreFactory = projectStoreFactory;
+            _loggerFactory = loggerFactory;
+            _logger = loggerFactory.CreateLogger<AppHost>();
+            var menuNavLogger = _loggerFactory.CreateLogger<MenuNavigator>();
+            _menuNav = new(menuNavLogger);
             _menuNav.Exited += (s, e) => Environment.Exit(0);
-            _logger = logger;
-            this._projectLogger = projectLogger;
         }
 
         public async Task RunAsync()
@@ -61,7 +62,7 @@ namespace WebShot
             await _menuNav.DisplayNew(MainMenu);
         }
 
-        private async Task LoadProject(string path)
+        private void LoadProject(string path)
         {
             if (Directory.Exists(path))
                 path = Path.Combine(path, FileProjectStore.ProjectFilename);
@@ -69,7 +70,7 @@ namespace WebShot
             _appState.SetCurrentProject(path);
         }
 
-        private async Task CreateProject(string path)
+        private void CreateProject(string path)
         {
             _appState.SetCurrentProject(path);
         }
@@ -106,13 +107,13 @@ namespace WebShot
             var options = new List<IMenuOption<string>>{
                 new ConsoleOption(
                     new OptionPrompt("Create <Project Directory Path>", "Create a project"),
-                    asyncHandler: (m,_) => CreateProject(m.Groups["path"].Value),
+                    handler: (m,_) => CreateProject(m.Groups["path"].Value),
                     matcher: new RegexOptionMatcher("create (?<path>.+)"),
                     completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
 
                 new ConsoleOption(
                     new OptionPrompt("Load <Project File or Directory Path>", "Load a project"),
-                    asyncHandler: (m,_) => LoadProject(m.Groups["path"].Value),
+                    handler: (m,_) => LoadProject(m.Groups["path"].Value),
                     matcher: new RegexOptionMatcher("load (?<path>.+)"),
                     completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
 
