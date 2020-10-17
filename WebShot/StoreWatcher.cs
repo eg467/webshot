@@ -14,8 +14,12 @@ namespace Webshot
     /// <summary>
     /// Persists changes of application state to the file store.
     /// </summary>
-    public sealed class StoreWatcher : IDisposable
+    internal sealed class StoreWatcher : IDisposable
     {
+        public event EventHandler? ProjectChanged;
+
+        public ApplicationState State => _reduxStore.GetState();
+
         private readonly IStore<ApplicationState> _reduxStore;
         private readonly IObjectStore<ApplicationState> _fileStore;
         private readonly FileProjectStoreFactory _projectStoreFactory;
@@ -38,6 +42,8 @@ namespace Webshot
 
         private void ProjectHandler(Project? project)
         {
+            ProjectChanged?.Invoke(this, EventArgs.Empty);
+
             if (project is null)
                 return;
 

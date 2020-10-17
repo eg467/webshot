@@ -30,6 +30,7 @@ namespace WebShot
         private ApplicationState State => _appState.State;
 
         private readonly ILogger<AppHost> _logger;
+        private readonly ILogger<Project> _projectLogger;
 
         /// <summary>
         /// The currently opened project. This will be non-null outside of the root/non-project menus.
@@ -41,12 +42,17 @@ namespace WebShot
 
         private bool IsRoot => _menuNav.Count == 1;
 
-        public AppHost(ApplicationStore appState, FileProjectStoreFactory projectStoreFactory, ILogger<AppHost> logger)
+        public AppHost(
+            ApplicationStore appState,
+            FileProjectStoreFactory projectStoreFactory,
+            ILogger<AppHost> logger,
+            ILogger<Project> projectLogger)
         {
             _appState = appState;
             _projectStoreFactory = projectStoreFactory;
             _menuNav.Exited += (s, e) => Environment.Exit(0);
             _logger = logger;
+            this._projectLogger = projectLogger;
         }
 
         public Task RunAsync()
@@ -135,6 +141,9 @@ namespace WebShot
 
         public IMenu ProjectMenu()
         {
+            // TEST
+            _projectLogger.LogError("TEST ERROR");
+
             List<IMenuOption<string>> options = new List<IMenuOption<string>>{
                 new ConsoleOption(
                     new OptionPrompt("'File' or 'Dir'", "Open project file or directory"),

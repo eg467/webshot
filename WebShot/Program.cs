@@ -29,8 +29,9 @@ namespace Webshot
 
             using (provider as IDisposable)
             {
-                // Force instantiation of singleton to watch for store changes.
+                // Force instantiation of independently running singletons.
                 _ = provider.GetService<StoreWatcher>();
+                _ = provider.GetService<NLogProjectTracker>();
 
                 var host = provider.GetService<AppHost>();
                 await host!.RunAsync();
@@ -51,6 +52,7 @@ namespace Webshot
                 .AddSingleton<IProjectStoreFactory>(p => p.GetService<FileProjectStoreFactory>()!)
                 .AddSingleton<IObjectStore<ApplicationState>>(_ => new FileStore<ApplicationState>("ApplicationState.json"))
                 .AddSingleton<AppHost, AppHost>()
+                .AddSingleton<NLogProjectTracker, NLogProjectTracker>()
                 .AddSingleton<IStore<ApplicationState>>(p =>
                 {
                     var store = p.GetService<IObjectStore<ApplicationState>>();
