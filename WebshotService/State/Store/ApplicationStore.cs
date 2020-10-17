@@ -111,7 +111,8 @@ namespace WebshotService.State.Store
             }
             var projectStore = _projectStoreFactory.Create(State.CurrentProject.Id);
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(true));
-            var screenshotter = new ProjectScreenshotter(projectStore);
+            var logger = _loggerFactory.CreateLogger<ProjectScreenshotter>();
+            var screenshotter = new ProjectScreenshotter(projectStore, logger);
             await screenshotter.TakeScreenshotsAsync(token, progress);
 
             var projectResults = projectStore?.GetResultsBySessionId() ?? new();

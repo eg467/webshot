@@ -20,6 +20,7 @@ using System.Collections.Immutable;
 using static WebShot.Menu.Menus.StringValidator;
 using WebshotService;
 using Microsoft.Extensions.Logging;
+using WebshotService.Screenshotter;
 
 namespace WebShot
 {
@@ -141,9 +142,6 @@ namespace WebShot
 
         public IMenu ProjectMenu()
         {
-            // TEST
-            _projectLogger.LogError("TEST ERROR");
-
             List<IMenuOption<string>> options = new List<IMenuOption<string>>{
                 new ConsoleOption(
                     new OptionPrompt("'File' or 'Dir'", "Open project file or directory"),

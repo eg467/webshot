@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -19,12 +20,14 @@ namespace WebshotService.Screenshotter
         private ScreenshotOptions ScreenshotOptions => _project.Options.ScreenshotOptions;
         private readonly DateTime _creationTimestamp = DateTime.Now;
         private string ScreenshotDir => _projectStore.GetSessionDirectory(_sessionId);
+        private readonly ILogger<ProjectScreenshotter> _logger;
 
-        public ProjectScreenshotter(IProjectStore projectStore)
+        public ProjectScreenshotter(IProjectStore projectStore, ILogger<ProjectScreenshotter> logger)
         {
             _projectStore = projectStore;
             _project = projectStore.Load();
             _sessionId = projectStore.CreateSession();
+            _logger = logger;
         }
 
         public async Task TakeScreenshotsAsync(CancellationToken? token = null, IProgress<TaskProgress>? progress = null)
@@ -76,8 +79,7 @@ namespace WebshotService.Screenshotter
                 catch (Exception ex)
                 {
                     pageResults = pageResults with { Error = ex.ToString() };
-                    // TODO: Add Logging
-                    Debug.WriteLine(ex.ToString());
+                    _logger.LogWarning(ex, "Error taking screenshot of page.");
                 }
             }
             return pageResults;
