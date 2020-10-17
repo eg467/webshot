@@ -54,7 +54,7 @@ namespace WebShot.Menu.ColoredConsole
         public static List<ColoredOutput> ToList(ConsoleColor? foreground, ConsoleColor? background, params string[] text) =>
             text.Select(t => new ColoredOutput(t, foreground, background)).ToList();
 
-        public static void WriteLine(params ColoredOutput[] messages)
+        public static void WriteLines(params ColoredOutput[] messages)
         {
             messages.ForEach(m => m.Write());
             Console.Write(Environment.NewLine);
@@ -98,7 +98,7 @@ namespace WebShot.Menu.ColoredConsole
             }
         }
 
-        public static Func<string, ColoredOutput> WithForeground(ConsoleColor color) =>
+        public static Func<string, ColoredOutput> ColoredFactory(ConsoleColor color) =>
             (string s) => new ColoredOutput(s, color);
 
         private void ApplyColor()

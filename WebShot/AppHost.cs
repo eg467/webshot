@@ -56,12 +56,12 @@ namespace WebShot
             this._projectLogger = projectLogger;
         }
 
-        public Task RunAsync()
+        public async Task RunAsync()
         {
-            return _menuNav.DisplayNew(MainMenu);
+            await _menuNav.DisplayNew(MainMenu);
         }
 
-        private void LoadProject(string path)
+        private async Task LoadProject(string path)
         {
             if (Directory.Exists(path))
                 path = Path.Combine(path, FileProjectStore.ProjectFilename);
@@ -69,7 +69,7 @@ namespace WebShot
             _appState.SetCurrentProject(path);
         }
 
-        private void CreateProject(string path)
+        private async Task CreateProject(string path)
         {
             _appState.SetCurrentProject(path);
         }
@@ -106,13 +106,13 @@ namespace WebShot
             var options = new List<IMenuOption<string>>{
                 new ConsoleOption(
                     new OptionPrompt("Create <Project Directory Path>", "Create a project"),
-                    handler: (m,_) => CreateProject(m.Groups["path"].Value),
+                    asyncHandler: (m,_) => CreateProject(m.Groups["path"].Value),
                     matcher: new RegexOptionMatcher("create (?<path>.+)"),
                     completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
 
                 new ConsoleOption(
                     new OptionPrompt("Load <Project File or Directory Path>", "Load a project"),
-                    handler: (m,_) => LoadProject(m.Groups["path"].Value),
+                    asyncHandler: (m,_) => LoadProject(m.Groups["path"].Value),
                     matcher: new RegexOptionMatcher("load (?<path>.+)"),
                     completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
 
@@ -150,6 +150,13 @@ namespace WebShot
                 new ConsoleOption(
                     new OptionPrompt("Spider", "Run the spider or set its options"),
                     completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt(
+                        "BrokenLinks",
+                        $"See a list of broken links ({CurrentProject.SpiderResults.BrokenLinks.Count}) found in your site."),
+                    completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
+
                 new ConsoleOption(
                     new OptionPrompt("Reload", "Reload the current project from the file"),
                     asyncHandler: Handler)
@@ -170,6 +177,22 @@ namespace WebShot
                     case "DIR":
                         var dir = Path.GetDirectoryName(projectPath) ?? throw new DirectoryNotFoundException();
                         Process.Start(dir);
+                        break;
+
+                    case "BROKENLINKS":
+                        ColoredOutput.WriteLines(
+                            "Broken Links Found...",
+                            "(Run the spider to update this list.)");
+
+                        var writer = ColoredOutput.ColoredFactory(ConsoleColor.Red);
+                        CurrentProject.SpiderResults.BrokenLinks
+                            .Select(l => $"--> {l.Target.AbsoluteUri}")
+                            .OrderBy(x => x)
+                            .Select(writer)
+                            .ForEach(x => ColoredOutput.WriteLines(x));
+
+                        ColoredOutput.WriteLines("Press any key to continue...");
+                        Console.ReadKey();
                         break;
 
                     case "RELOAD":

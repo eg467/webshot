@@ -68,7 +68,7 @@ namespace WebShot.Menu
             // Start the timeout
             Task t = task.ContinueWith(_ =>
             {
-                if (_status == Status.UserCancelled)
+                if (_status != Status.UserCancelled)
                 {
                     // Timeout => cancel the console read
                     var handle = GetStdHandle(STD_INPUT_HANDLE);

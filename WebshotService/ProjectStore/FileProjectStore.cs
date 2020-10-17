@@ -45,7 +45,7 @@ namespace WebshotService.ProjectStore
             }
             else if (!filePath.EndsWith(ProjectFilename, StringComparison.Ordinal))
             {
-                throw new ArgumentException($"A directory can only have one project named {ProjectFilename}");
+                throw new FileNotFoundException("No such directory or project file found.");
             }
             else
             {
