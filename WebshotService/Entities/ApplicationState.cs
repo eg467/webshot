@@ -6,8 +6,8 @@ namespace WebshotService.Entities
     public record ApplicationState
     {
         public Project? CurrentProject { get; init; }
-        public ImmutableArray<(string, ScreenshotResults)> ProjectResults { get; init; } =
-            ImmutableArray<(string, ScreenshotResults)>.Empty;
+        public ImmutableArray<(string, SessionScreenshots)> ProjectResults { get; init; } =
+            ImmutableArray<(string, SessionScreenshots)>.Empty;
 
         public bool IsTakingScreenshots { get; init; }
         public bool IsCrawlingSite { get; init; }

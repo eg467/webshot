@@ -56,7 +56,7 @@ namespace WebShot.Menu.ColoredConsole
 
         public static void WriteLines(params ColoredOutput[] messages)
         {
-            messages.ForEach(m => m.Write());
+            messages.ForEach(m => m.WriteLine());
             Console.Write(Environment.NewLine);
         }
 

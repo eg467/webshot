@@ -37,15 +37,8 @@ namespace WebshotService.Spider
 
         public UriSources GetOrCreateSources(Uri uri) => GetOrCreateSources(new StandardizedUri(uri));
 
-        public UriSources GetOrCreateSources(StandardizedUri uri)
-        {
-            if (!_uris.TryGetValue(uri, out var sources))
-            {
-                sources = new UriSources(uri);
-                _uris[uri] = sources;
-            }
-            return sources;
-        }
+        public UriSources GetOrCreateSources(StandardizedUri uri) =>
+            _uris.FindOrAdd(uri, u => new UriSources(u));
 
         public UriSources CombineSourcesIfRedirection(StandardizedUri sourceUri, Uri redirectionTarget)
         {

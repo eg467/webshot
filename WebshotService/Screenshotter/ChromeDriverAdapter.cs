@@ -42,9 +42,7 @@ namespace WebshotService.Screenshotter
         public void Dispose()
         {
             if (File.Exists(AuthExtensionPath))
-            {
                 File.Delete(AuthExtensionPath);
-            }
             _driver.Quit();
             _driver.Dispose();
         }
@@ -54,10 +52,9 @@ namespace WebshotService.Screenshotter
             var options = new ChromeOptions();
             options.IncognitoMode();
             if (_projectCredentials.CredentialsByDomain.Any())
-            {
                 options.GenerateBasicAuthenticationExtension(AuthExtensionPath, _projectCredentials);
-            }
-            var driver = new ChromeDriver(options);
+
+            var driver = new ChromeDriver(Environment.CurrentDirectory, options);
             return driver;
         }
 
@@ -77,9 +74,7 @@ namespace WebshotService.Screenshotter
 
             _driver.ResizeWindow(width);
             if (_options.HighlightBrokenLinks && Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
-            {
                 HighlightBrokenLinks(uri);
-            }
 
             // Sometimes, when this isn't high enough, the performance timings return incomplete data.
             int screenshotDelay = 3000;
@@ -198,9 +193,7 @@ namespace WebshotService.Screenshotter
             {
                 // Usually thrown when the driver or browser window is closed.
                 if (!(ex is WebDriverException || ex is NoSuchWindowException))
-                {
                     throw;
-                }
             }
         }
 
@@ -234,9 +227,8 @@ document.getElementsByTagName('head')[0].appendChild(style);";
             var extensionDir = "temp-extension-files";
             using var ext = new ChromeAuthExtension(credentials, extensionDir);
             if (File.Exists(extensionFilePath))
-            {
                 File.Delete(extensionFilePath);
-            }
+
             ext.CreateZip(extensionFilePath);
             options.AddArguments("--no-sandbox");
             options.AddExtensions(extensionFilePath);

@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.ComTypes;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using WebShot.Menu.ColoredConsole;
 using WebshotService;
 
 namespace WebShot.Menu
@@ -26,7 +27,7 @@ namespace WebShot.Menu
         [DllImport("kernel32.dll", SetLastError = true)]
         private static extern bool CancelIoEx(IntPtr handle, IntPtr lpOverlapped);
 
-        private int _initialLine;
+        private int _initialLine = 0;
         private int _endLine = -1;
 
         private readonly Progress<TaskProgress> _progress = new();
@@ -45,14 +46,12 @@ namespace WebShot.Menu
 
         private void Progress_ProgressChanged(object? sender, TaskProgress e)
         {
-            _recentProgress = $"{e.Index}/{e.Count} ({e.CurrentItem})";
-
-            if (_endLine == -1)
-                return;
-
+            var origTop = Console.CursorTop;
             Console.SetCursorPosition(0, _initialLine);
-            Console.WriteLine(_recentProgress);
-            Console.SetCursorPosition(0, _endLine);
+            _recentProgress = $"{e.Index}/{e.Count} ({e.CurrentItem})";
+            var padding = new string(' ', Console.BufferWidth - _recentProgress.Length);
+            new ColoredOutput(_recentProgress + padding, ConsoleColor.Black, ConsoleColor.White).WriteLine();
+            Console.SetCursorPosition(0, origTop);
         }
 
         public Task CompleteOrCancel(Task task)
@@ -74,6 +73,7 @@ namespace WebShot.Menu
                     var handle = GetStdHandle(STD_INPUT_HANDLE);
                     CancelIoEx(handle, IntPtr.Zero);
                 }
+
                 Console.SetCursorPosition(0, _endLine);
             });
 
@@ -87,7 +87,8 @@ namespace WebShot.Menu
                         Console.WriteLine(_recentProgress);
 
                     Console.WriteLine($"Press {cancelKey} to cancel operation...");
-                    (_, _endLine) = Console.GetCursorPosition();
+                    if (_endLine == -1)
+                        (_, _endLine) = Console.GetCursorPosition();
                     ConsoleKeyInfo key = Console.ReadKey();
                     if (key.Key == ConsoleKey.Escape)
                     {

@@ -71,8 +71,8 @@ namespace WebshotService.State.Reducers
                 .Reduce();
         }
 
-        public static ImmutableArray<(string, ScreenshotResults)> ResultsReducer(
-            ImmutableArray<(string, ScreenshotResults)> state,
+        public static ImmutableArray<(string, SessionScreenshots)> ResultsReducer(
+            ImmutableArray<(string, SessionScreenshots)> state,
             IAction action)
         {
             return action switch

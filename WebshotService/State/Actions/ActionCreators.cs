@@ -31,48 +31,8 @@ namespace WebshotService.State.Actions
             (dispatch, getState) =>
             {
                 dispatch(new ProjectActions.SetProject(null));
-                dispatch(new ProjectActions.SetProjectResults(ImmutableArray<(string, ScreenshotResults)>.Empty));
+                dispatch(new ProjectActions.SetProjectResults(ImmutableArray<(string, SessionScreenshots)>.Empty));
             };
-
-        //public static ActionCreator<ApplicationState> UpdateScheduledProjectsDetails(IProjectStoreFactory projectStoreFactory) =>
-        //    (dispatch, getState) =>
-        //    {
-        //        ApplicationState state = getState();
-        //        SchedulerState schedulerState = state.SchedulerState;
-        //        ImmutableArray<ScheduledProject> scheduledProjects = schedulerState.ScheduledProjects;
-
-        //        Project currentProject = schedulerState.CurrentProject;
-
-        //        var newScheduledProjectList = scheduledProjects
-        //            .Select(p =>
-        //            {
-        //                var project = projectStoreFactory.Create(p.ProjectId).Load();
-        //                var domains = project.Options.ScreenshotOptions.TargetPages.Select(u => u.AbsoluteUri);
-        //                var domainLabel = string.Join(", ", domains);
-
-        //                if (p.ProjectId == schedulerState.CurrentProject?.Id)
-        //                {
-        //                    currentProject = project;
-        //                }
-
-        //                return new ScheduledProject(
-        //                    p.ProjectId,
-        //                    project.Name,
-        //                    domainLabel,
-        //                    p.Enabled,
-        //                    p.LastRun,
-        //                    p.RunImmediately,
-        //                    p.Interval);
-        //            })
-        //            .ToList();
-
-        //        dispatch(new SchedulerActions.SetSchedulerOptions()
-        //        {
-        //            CurrentProject = currentProject,
-        //            Enabled = schedulerState.Enabled,
-        //            Projects = newScheduledProjectList
-        //        });
-        //    };
 
         public static ActionCreator<ApplicationState> RunScheduledProjectImmediately(string projectId) =>
             (dispatch, getState) =>

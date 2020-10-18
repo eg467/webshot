@@ -20,10 +20,8 @@ namespace WebshotService.ProjectStore
         /// <summary>
         /// Retrieves a saved screenshot from the project
         /// </summary>
-        /// <param name="sessionId"></param>
-        /// <param name="file"></param>
         /// <returns></returns>
-        Image GetImage(string sessionId, DeviceScreenshotFile file);
+        Image? GetImage(string sessionId, Uri uri, Device device);
 
         /// <summary>
         /// Creates a session and its directory.
@@ -33,12 +31,12 @@ namespace WebshotService.ProjectStore
 
         string GetSessionDirectory(string sessionId);
 
-        void SaveResults(string sessionId, ScreenshotResults results);
+        void SaveResults(string sessionId, SessionScreenshots results);
 
         /// <summary>
         /// Retrieves all screenshots and timings for this project.
         /// </summary>
         /// <returns></returns>
-        List<(string Id, ScreenshotResults Result)> GetResultsBySessionId();
+        List<(string Id, SessionScreenshots Result)> GetResultsBySessionId();
     }
 }

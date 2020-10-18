@@ -79,6 +79,31 @@ namespace WebshotService
 
     public static class Extensions
     {
+        public static T FindOrAdd<T>(this List<T> items, Predicate<T> match, Func<T> create)
+        {
+            int io = items.FindIndex(match);
+            if (io >= 0)
+                return items[io];
+
+            var newItem = create();
+            items.Add(newItem);
+            return newItem;
+        }
+
+        public static TValue FindOrAdd<TKey, TValue>(
+            this Dictionary<TKey, TValue> items,
+            TKey key,
+            Func<TKey, TValue> create)
+        where TKey : notnull
+        {
+            if (items.TryGetValue(key, out TValue value))
+                return value;
+
+            var item = create(key);
+            items[key] = item;
+            return item;
+        }
+
         public static int Find<T>(this IImmutableList<T> items, Func<T, bool> predicate)
         {
             for (var i = 0; i < items.Count; i++)

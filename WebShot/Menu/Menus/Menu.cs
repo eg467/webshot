@@ -21,6 +21,28 @@ namespace WebShot.Menu.Menus
             Console.WriteLine("Press any key to continue...");
             _ = Console.ReadKey();
         }
+
+        public static bool Confirm(string prompt = "Confirm?")
+        {
+            static string Label(string[] values) => $"'{string.Join("' or '", values)}'";
+            var yeses = new[] { "YES", "Y" };
+            var nos = new[] { "NO", "N" };
+            do
+            {
+                Console.WriteLine(prompt);
+                Console.WriteLine($"Press {Label(yeses)} to confirm or {Label(nos)} to cancel.");
+                var x = Console.ReadLine();
+                if (x is null)
+                    continue;
+
+                if (yeses.Contains(x, StringComparer.OrdinalIgnoreCase))
+                    return true;
+                if (nos.Contains(x, StringComparer.OrdinalIgnoreCase))
+                    return false;
+
+                Console.WriteLine("Invalid input.");
+            } while (true);
+        }
     }
 
     public class ConsoleMenu : Menu<string>
@@ -41,6 +63,7 @@ namespace WebShot.Menu.Menus
         private readonly string _header;
         private readonly IOutput _description;
         private readonly Inputter<TInput> _inputGetter;
+
         public CompletionHandler CompletionHandler { get; set; } =
             CompletionHandlers.Back;
 

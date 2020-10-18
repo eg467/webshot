@@ -5,12 +5,12 @@ namespace WebshotService.Entities
     public record Link
     {
         /// <summary>
-        /// The page that references the broken link.
+        /// The page that references the link.
         /// </summary>
         public Uri CallingPage { get; init; }
 
         /// <summary>
-        /// The raw link in the anchor tag for finding the broken link sources.
+        /// The raw link in the anchor tag for finding the link sources.
         /// </summary>
         public string Href { get; init; }
 

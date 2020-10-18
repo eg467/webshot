@@ -21,6 +21,9 @@ using static WebShot.Menu.Menus.StringValidator;
 using WebshotService;
 using Microsoft.Extensions.Logging;
 using WebshotService.Screenshotter;
+using System.Drawing.Text;
+using OpenQA.Selenium.DevTools.Debugger;
+using WebshotService.Stats;
 
 namespace WebShot
 {
@@ -153,10 +156,20 @@ namespace WebShot
                     completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
 
                 new ConsoleOption(
+                    new OptionPrompt("Screenshots", "Take screenshots of web pages"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ScreenshotsMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Stats", "View request statistics"),
+                    asyncHandler: Handler,
+                    completionHandler: CompletionHandlers.Repeat),
+
+                new ConsoleOption(
                     new OptionPrompt(
                         "BrokenLinks",
                         $"See a list of broken links ({CurrentProject.SpiderResults.BrokenLinks.Count}) found in your site."),
-                    completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
+                    asyncHandler: Handler,
+                    completionHandler: CompletionHandlers.Repeat),
 
                 new ConsoleOption(
                     new OptionPrompt("Reload", "Reload the current project from the file"),
@@ -196,6 +209,60 @@ namespace WebShot
                         Console.ReadKey();
                         break;
 
+                    case "STATS":
+                        Console.WriteLine("Page Request Statistics:");
+                        var store = (FileProjectStore)_projectStoreFactory.Create(CurrentProject.Id);
+                        var results = store.GetResultsByUri().OrderBy(x => x.Key);
+                        foreach (var kv in results)
+                        {
+                            var uri = kv.Key;
+                            var statsForUri = kv.Value
+                                .Select(x => x.PageStats())
+                                .OrderBy(x => x.Timestamp)
+                                .ToList();
+
+                            var timingsForUri = statsForUri
+                                .Select(x => x.Timing)
+                                .ToList();
+
+                            RequestStatistics latest = statsForUri.Last();
+
+                            Dictionary<string, NavigationTiming.TimingStats> stats = NavigationTiming.Stats(timingsForUri);
+
+                            string[] fields = new[]
+                            {
+                                nameof(NavigationTiming.Ttfb),
+                                nameof(NavigationTiming.Response),
+                                nameof(NavigationTiming.FrontendProcessing),
+                                nameof(NavigationTiming.Duration),
+                                nameof(NavigationTiming.TransferSize)
+                            };
+
+                            List<(string opLabel, Func<NavigationTiming.TimingStats, double> operation)> operations = new()
+                            {
+                                ("Median", t => t.Median),
+                                ("Min", t => t.Min),
+                                ("Max", t => t.Max),
+                            };
+
+                            void WriteStats(string opLabel, Func<NavigationTiming.TimingStats, double> selector)
+                            {
+                                var timingArr = fields.Select(f => stats[f]).Select(selector).ToArray();
+                                var formats = fields.Select((f, i) => $"{f}={timingArr[i]:N2}");
+                                var formatLabel = string.Join(", ", formats);
+                                Console.WriteLine($"{opLabel}: {formatLabel}");
+                            }
+
+                            ColoredOutput.WriteLines(uri.AbsoluteUri, "", $"Latest data ({latest.Timestamp}): ", latest.Timing.SerializeAll(), "");
+
+                            Console.WriteLine(uri);
+                            foreach (var (opLabel, operation) in operations)
+                                WriteStats(opLabel, operation);
+                        }
+
+                        DefaultMenuLines.PressKeyToContinue();
+                        break;
+
                     case "RELOAD":
                         LoadProject(projectPath);
                         break;
@@ -211,13 +278,122 @@ namespace WebShot
                 options);
         }
 
+        public IMenu ScreenshotsMenu()
+        {
+            List<IMenuOption<string>> options = new()
+            {
+                new ConsoleOption(
+                    new OptionPrompt("Pages", "Choose what pages to download."),
+                    completionHandler: CompletionHandlers.FromMenuCreator(SelectTargetPages)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Options", "Choose screenshotting options."),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ScreenshotOptionsMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Run", "Take screenshots."),
+                    asyncHandler: Handler,
+                    completionHandler: CompletionHandlers.Back),
+            };
+
+            async Task Handler(Match _, ICompletionHandler _2)
+            {
+                ColoredOutput.WriteLines(Utils.FormattedSerialize(CurrentProject.Options.ScreenshotOptions));
+                if (!DefaultMenuLines.Confirm("Would you like to take screenshots?"))
+                    return;
+                using CancellableConsoleTask task = new();
+                Task screenshotTask = _appState.RunScreenshotter(task.Token, task.Progress);
+                await task.CompleteOrCancel(screenshotTask);
+            }
+
+            ColoredOutput description = Utils.FormattedSerialize(CurrentProject.Options.ScreenshotOptions);
+            return GenericNavigationMenu("Screenshots", description, options);
+        }
+
+        public IMenu ScreenshotOptionsMenu()
+        {
+            //public ImmutableDictionary<Uri, bool> TargetPages { get; init; } = ImmutableDictionary<Uri, bool>.Empty;
+            //public ImmutableDictionary<Device, DeviceScreenshotOptions> DeviceOptions { get; init; }
+            //public bool OverwriteResults { get; init; }
+            //public bool HighlightBrokenLinks { get; init; }
+
+            ScreenshotOptions Convert(ConverterFactory inputter)
+            {
+                ScreenshotOptions options = CurrentProject.Options.ScreenshotOptions;
+
+                DeviceScreenshotOptions OptionsFor(Device key) =>
+                    options.DeviceOptions.TryGetValue(key, out var value)
+                        ? value!
+                        : new Options().ScreenshotOptions.DeviceOptions[key];
+
+                DeviceScreenshotOptions MakeDeviceOptionsFor(Device device)
+                {
+                    var existingOptions = OptionsFor(device);
+                    var defaultEnabled = Maybe.From(existingOptions.Enabled);
+                    bool deviceEnabled = inputter.New($"Take screenshots in {device} mode").Bool(defaultEnabled);
+                    int deviceWidth = existingOptions.PixelWidth;
+                    if (deviceEnabled)
+                    {
+                        var defaultWidth = Maybe.From(existingOptions.PixelWidth);
+                        deviceWidth = inputter.New($"{device} width (px)").Int(defaultWidth, NumRange.AtLeast(300));
+                    }
+                    return new DeviceScreenshotOptions(device, deviceWidth, deviceEnabled);
+                }
+
+                var deviceOptionbuilder = ImmutableDictionary.CreateBuilder<Device, DeviceScreenshotOptions>();
+                var devices = new[] { Device.Desktop, Device.Tablet, Device.Mobile };
+                devices.ForEach(d => deviceOptionbuilder.Add(d, MakeDeviceOptionsFor(d)));
+
+                return new ScreenshotOptions()
+                {
+                    DeviceOptions = deviceOptionbuilder.ToImmutable(),
+                    HighlightBrokenLinks = inputter.New("Highlight broken links in screenshots").Bool(Maybe.From(options.HighlightBrokenLinks)),
+                    OverwriteResults = inputter.New("Overwrite results").Bool(Maybe.From(options.OverwriteResults)),
+                    TargetPages = options.TargetPages // Set these separately.
+                };
+            }
+
+            Task Handler(ScreenshotOptions options, ICompletionHandler _)
+            {
+                _appState.SetScreenshotOptions(options);
+                return Task.CompletedTask;
+            }
+
+            return new FactoryMenu<ScreenshotOptions>(
+                header: "Screenshot settings",
+                creator: Convert,
+                asyncHandler: Handler,
+                completionHandler: CompletionHandlers.Back);
+        }
+
+        public IMenu SelectTargetPages()
+        {
+            var items = CurrentProject.Options.ScreenshotOptions.TargetPages.Select(x => (x.Key, x.Value));
+            return new ToggleMenu<Uri>(
+                "Select pages to screenshoot",
+                null,
+                items: items,
+                labeler: x => x.AbsoluteUri,
+                handler: Handler,
+                completionHandler: CompletionHandlers.Back);
+
+            Task Handler(ListWithSelection<(Uri page, bool enabled)> pages, ICompletionHandler _)
+            {
+                Dictionary<Uri, bool> newPages = new();
+                foreach (var page in pages.Items)
+                    newPages[page.page] = page.enabled;
+                _appState.SetTargetPages(newPages);
+                return Task.CompletedTask;
+            }
+        }
+
         public IMenu SpiderMenu()
         {
             ColoredOutput description = Utils.FormattedSerialize(CurrentProject.Options.SpiderOptions);
 
             List<IMenuOption<string>> options = new List<IMenuOption<string>>{
                 new ConsoleOption(
-                    new OptionPrompt("Run", "run the spider to find all web pages on the site"),
+                    new OptionPrompt("Run", "Run the spider to find all web pages on the site"),
                     asyncHandler: RunSpiderHandler),
                 new ConsoleOption(
                     new OptionPrompt("Options", "Set Options"),

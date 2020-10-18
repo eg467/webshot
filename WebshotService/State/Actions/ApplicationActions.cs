@@ -15,8 +15,8 @@ namespace WebshotService.State.Actions.ApplicationActions
 namespace WebshotService.State.Actions.ProjectActions
 {
     public record SetProject(Project? Project) : IAction;
-    public record SetProjectResults(IImmutableList<(string, ScreenshotResults)> Results) : IAction;
-    public record AddProjectResult(string Id, ScreenshotResults Results) : IAction;
+    public record SetProjectResults(IImmutableList<(string, SessionScreenshots)> Results) : IAction;
+    public record AddProjectResult(string Id, SessionScreenshots Results) : IAction;
     public record Rename(string Name) : IAction;
     public record SetOptions(Options Options) : IAction;
     public record SetSpiderOptions(SpiderOptions Options) : IAction;

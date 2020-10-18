@@ -107,27 +107,25 @@ namespace WebShot.Menu.Menus
         {
             // Adapted From: https://stackoverflow.com/questions/46908148/controlling-menu-with-the-arrow-keys-and-enter
 
-            var startX = 15;
-            var startY = 0;
+            if (!Items.Any())
+            {
+                ColoredOutput.WriteLines(_header, "No items are available to select...");
+                DefaultMenuLines.PressKeyToContinue();
+                return new(Items, -1);
+            }
+
+            var startX = 4;
+            int startY;
             const int spacingPerLine = 14;
             ConsoleKey key;
             Console.CursorVisible = false;
             var cancelled = false;
             SelectedIndex = 0;
-
-            if (!Items.Any())
-            {
-                ((ColoredOutput)_header).WriteLine();
-                new ColoredOutput("No items are available to select...").WriteLine();
-                DefaultMenuLines.PressKeyToContinue();
-                return new(Items, -1);
-            }
-
             do
             {
                 Console.Clear();
                 Console.SetCursorPosition(0, 0);
-                ((ColoredOutput)_header).PrintHeader();
+                ColoredOutput.WriteLines(_header);
                 _description?.WriteLine();
 
                 (_, startY) = Console.GetCursorPosition();

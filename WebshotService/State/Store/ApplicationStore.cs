@@ -103,6 +103,11 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.ToggleTargetPageEnabled(uri, enabled));
         }
 
+        public void SetTargetPages(IReadOnlyDictionary<Uri, bool> pages)
+        {
+            _store.Dispatch(new Actions.ProjectActions.SetTargetPages(pages));
+        }
+
         public async Task RunScreenshotter(CancellationToken? token, IProgress<TaskProgress>? progress = null)
         {
             if (State.CurrentProject is null)

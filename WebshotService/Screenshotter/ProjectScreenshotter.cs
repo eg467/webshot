@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -32,7 +33,7 @@ namespace WebshotService.Screenshotter
 
         public async Task TakeScreenshotsAsync(CancellationToken? token = null, IProgress<TaskProgress>? progress = null)
         {
-            var results = new ScreenshotResults();
+            var results = new SessionScreenshots();
 
             using ChromeDriverAdapter ss = new(ScreenshotOptions, _project.SpiderResults.BrokenLinks, _project.Options.Credentials);
             int i = 0;
@@ -49,8 +50,8 @@ namespace WebshotService.Screenshotter
 
                 progress?.Report(++i, selectedTargets.Count, uri.AbsoluteUri);
 
-                var result = await ScreenshotPageAsAllDevices(ss, uri);
-                results = results with { Screenshots = results.Screenshots.Add(result) };
+                PageScreenshots result = await ScreenshotPageAsAllDevices(ss, uri);
+                results = results with { PageScreenshots = results.PageScreenshots.Add(result) };
             }
 
             _projectStore.SaveResults(_sessionId, results);
@@ -64,50 +65,44 @@ namespace WebshotService.Screenshotter
 
         private async Task<PageScreenshots> ScreenshotPageAsAllDevices(ChromeDriverAdapter driver, Uri uri)
         {
-            PageScreenshots pageResults = new(uri);
-            foreach (var size in GetEnabledDeviceSizes())
+            Dictionary<Device, Screenshot> screenshots = new();
+            foreach ((Device device, int width) in GetEnabledDeviceSizes())
             {
-                try
-                {
-                    DeviceScreenshotResult deviceResults = await ScreenshotPageAsDeviceAsync(driver, uri, size.Device, size.Width);
-                    pageResults = pageResults with
-                    {
-                        PathsByDevice = pageResults.PathsByDevice.Add(size.Device, deviceResults.Filename),
-                        RequestTiming = pageResults.RequestTiming ?? deviceResults.Timing
-                    };
-                }
-                catch (Exception ex)
-                {
-                    pageResults = pageResults with { Error = ex.ToString() };
-                    _logger.LogWarning(ex, "Error taking screenshot of page.");
-                }
+                var path = GetImagePath(uri, device);
+                screenshots[device] = await TryTakeScreenshot(driver, uri, device, width, path);
             }
-            return pageResults;
+            return new(uri, DateTime.Now, screenshots.ToImmutableDictionary());
         }
 
-        private async Task<DeviceScreenshotResult> ScreenshotPageAsDeviceAsync(
-                ChromeDriverAdapter driver,
-                Uri url,
-                Device device,
-                int width)
+        private async Task<Screenshot> TryTakeScreenshot(ChromeDriverAdapter driver, Uri uri, Device device, int width, string path)
         {
-            var imgPath = GetImagePath();
-            NavigationTiming timing = await Task.Run(TakeScreenshot);
-            return new DeviceScreenshotResult(imgPath, timing);
-
-            NavigationTiming TakeScreenshot()
+            try
             {
-                return driver.TakeScreenshot(url.AbsoluteUri, imgPath, width);
+                return await TakeScreenshot();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error taking screenshot of {0}.", uri);
+                return new(null, path, ex.Message);
             }
 
-            string GetImagePath()
+            // HELPER FNS
+
+            async Task<Screenshot> TakeScreenshot()
             {
-                var baseName = Utils.SanitizeFilename(url.ToString());
-                var filename = $"{baseName}.{device}{ChromeDriverAdapter.ImageExtension}";
-                return Path.Combine(ScreenshotDir, filename);
+                NavigationTiming PerformScreenshot() => driver.TakeScreenshot(uri.AbsoluteUri, path, width);
+                NavigationTiming timing = await Task.Run(PerformScreenshot);
+                return new Screenshot(timing, path, null);
             }
+        }
+
+        private string GetImagePath(Uri url, Device device)
+        {
+            var baseName = Utils.SanitizeFilename(url.ToString());
+            var filename = $"{baseName}.{device}{ChromeDriverAdapter.ImageExtension}";
+            return Path.Combine(ScreenshotDir, filename);
         }
     }
 
-    internal record DeviceScreenshotResult(string Filename, NavigationTiming Timing);
+    //internal record DeviceScreenshotResult(string Filename, NavigationTiming Timing);
 }
