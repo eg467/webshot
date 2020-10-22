@@ -19,12 +19,12 @@ namespace WebShot.Menu.Menus
     public class FactoryMenu<TOutput> : IMenu
     {
         private string _header;
-        private readonly Func<ConverterFactory, TOutput> _creator;
+        private readonly Func<InputParserFactory, TOutput> _creator;
         private readonly CustomOption<TOutput> _option;
 
         public FactoryMenu(
             string header,
-            Func<ConverterFactory, TOutput> creator,
+            Func<InputParserFactory, TOutput> creator,
             AsyncOptionHandler<TOutput> asyncHandler,
             CompletionHandler completionHandler)
         {
@@ -35,7 +35,7 @@ namespace WebShot.Menu.Menus
 
         public FactoryMenu(
             string header,
-            Func<ConverterFactory, TOutput> creator,
+            Func<InputParserFactory, TOutput> creator,
             OptionHandler<TOutput> handler,
             CompletionHandler completionHandler)
             : this(header, creator, handler.ToAsync(), completionHandler)
@@ -45,7 +45,7 @@ namespace WebShot.Menu.Menus
         public async Task<CompletionHandler> DisplayAsync()
         {
             new ColoredOutput(_header).PrintHeader();
-            var output = _creator(new ConverterFactory());
+            var output = _creator(new InputParserFactory());
             await _option.Execute(output);
             return _option.CompletionHandler;
         }
@@ -91,7 +91,7 @@ namespace WebShot.Menu.Menus
             item.Length > 0 ? item : null;
     }
 
-    public class ConverterFactory
+    public class InputParserFactory
     {
         public FactoryMenuConverter New(
                 string prompt,
@@ -276,6 +276,21 @@ namespace WebShot.Menu.Menus
                     }
                 },
                 defaultValue);
+
+        public Uri Uri(Maybe<Uri>? defaultValue = null) =>
+        ProcessInputInternal(
+            response =>
+            {
+                try
+                {
+                    return new(response);
+                }
+                catch (FormatException ex)
+                {
+                    throw new MenuInputException("The value must be a valid Uri.", ex);
+                }
+            },
+            defaultValue);
 
         /// <summary>
         ///

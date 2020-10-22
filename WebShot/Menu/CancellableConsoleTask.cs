@@ -43,15 +43,20 @@ namespace WebShot.Menu
         }
 
         private string _recentProgress = "Progress...";
+        private readonly ConsoleKey _cancelKey = ConsoleKey.Escape;
+        private int? _lastWriteLine;
 
         private void Progress_ProgressChanged(object? sender, TaskProgress e)
         {
-            var origTop = Console.CursorTop;
-            Console.SetCursorPosition(0, _initialLine);
+            // The last progress status was the last thing written
+            int numProgressLines = 2; // The progress bar and the "press any key" prompt.
+            bool overwritePreviousProgress = _lastWriteLine.HasValue && Console.CursorTop == _lastWriteLine + numProgressLines;
+
+            if (overwritePreviousProgress)
+                Console.SetCursorPosition(0, _lastWriteLine!.Value);
+
             _recentProgress = $"{e.Index}/{e.Count} ({e.CurrentItem})";
-            var padding = new string(' ', Console.BufferWidth - _recentProgress.Length);
-            new ColoredOutput(_recentProgress + padding, ConsoleColor.Black, ConsoleColor.White).WriteLine();
-            Console.SetCursorPosition(0, origTop);
+            WritePrompt();
         }
 
         public Task CompleteOrCancel(Task task)
@@ -80,15 +85,10 @@ namespace WebShot.Menu
             try
             {
                 // Start reading from the console
-                var cancelKey = ConsoleKey.Escape;
                 while (true)
                 {
-                    if (_progress is object)
-                        Console.WriteLine(_recentProgress);
+                    WritePrompt();
 
-                    Console.WriteLine($"Press {cancelKey} to cancel operation...");
-                    if (_endLine == -1)
-                        (_, _endLine) = Console.GetCursorPosition();
                     ConsoleKeyInfo key = Console.ReadKey();
                     if (key.Key == ConsoleKey.Escape)
                     {
@@ -113,6 +113,14 @@ namespace WebShot.Menu
             }
 
             return t;
+        }
+
+        private void WritePrompt()
+        {
+            _lastWriteLine = Console.CursorTop;
+            var padding = new string(' ', Console.BufferWidth - _recentProgress.Length);
+            new ColoredOutput(_recentProgress + padding, ConsoleColor.Black, ConsoleColor.White).WriteLine();
+            Console.WriteLine($"Press {_cancelKey} to cancel operation...");
         }
 
         public void Dispose()

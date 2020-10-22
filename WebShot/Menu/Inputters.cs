@@ -1,9 +1,11 @@
-﻿using System;
+﻿using NLog.Fluent;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using WebShot.Menu.ColoredConsole;
+using WebShot.Menu.Menus;
 
 namespace WebShot.Menu
 {
@@ -14,13 +16,29 @@ namespace WebShot.Menu
         public static Inputter<TInput> FromValue<TInput>(TInput value) =>
             () => value;
 
-        public static Inputter<string> ConsolePrompt(IOutput? prompt)
+        public static Inputter<string> ConsolePrompt(IOutput? prompt, StringValidator? validator = null, bool trim = true)
         {
             return () =>
             {
-                prompt?.WriteLine();
-                return Console.ReadLine()?.Trim()
-                    ?? throw new InvalidOperationException("No input detected.");
+                validator ??= new();
+                string input = "";
+                while (true)
+                {
+                    prompt?.WriteLine();
+                    input = Console.ReadLine() ?? "";
+                    if (trim)
+                        input = input.Trim();
+
+                    try
+                    {
+                        validator.EnsureValid(input);
+                        return input;
+                    }
+                    catch (Exception ex)
+                    {
+                        ColoredOutput.Error(ex.Message);
+                    }
+                }
             };
         }
     }

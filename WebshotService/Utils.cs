@@ -79,6 +79,21 @@ namespace WebshotService
 
     public static class Extensions
     {
+        public static string TimeDiffLabel(this DateTime date)
+        {
+            var diff = DateTime.Now.Subtract(date);
+
+            string timeLabel;
+            if (Math.Abs(diff.TotalDays) > 1d)
+                timeLabel = $"{diff.TotalDays:f1} days";
+            else if (Math.Abs(diff.TotalHours) > 1d)
+                timeLabel = $"{diff.TotalHours:f1} hr";
+            else
+                timeLabel = $"{diff.TotalMinutes:f1} min";
+
+            return diff.TotalMilliseconds > 0 ? $"in {timeLabel}" : $"{timeLabel} ago";
+        }
+
         public static T FindOrAdd<T>(this List<T> items, Predicate<T> match, Func<T> create)
         {
             int io = items.FindIndex(match);

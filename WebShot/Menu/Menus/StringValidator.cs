@@ -15,7 +15,7 @@ namespace WebShot.Menu.Menus
     {
         public static StringValidator MatchAll => new();
 
-        internal class LengthValidator : IInputValidator
+        private class LengthValidator : IInputValidator
         {
             private readonly NumRange<int> _lengthRange;
 
@@ -30,7 +30,7 @@ namespace WebShot.Menu.Menus
                 _lengthRange.Contains(input.Length);
         }
 
-        internal class IntValidator : IInputValidator
+        private class IntValidator : IInputValidator
         {
             public string ErrorMessage => "The value must be an integer.";
 
@@ -38,7 +38,7 @@ namespace WebShot.Menu.Menus
                 int.TryParse(input, out var _);
         }
 
-        internal class DoubleValidator : IInputValidator
+        private class DoubleValidator : IInputValidator
         {
             public string ErrorMessage => "The value must be numeric.";
 
@@ -46,7 +46,7 @@ namespace WebShot.Menu.Menus
                 double.TryParse(input, out var _);
         }
 
-        internal class RegexValidator : IInputValidator
+        private class RegexValidator : IInputValidator
         {
             private readonly Regex _regex;
 
@@ -75,7 +75,7 @@ namespace WebShot.Menu.Menus
         /// <summary>
         /// checks if a string is a valid reguar expression pattern.
         /// </summary>
-        internal class RegexPatternValidator : IInputValidator
+        private class RegexPatternValidator : IInputValidator
         {
             public bool Validate(string input)
             {
@@ -93,7 +93,7 @@ namespace WebShot.Menu.Menus
             public string ErrorMessage => "The input is not a valid regular expression pattern.";
         }
 
-        internal class PredicateValidator : IInputValidator
+        private class PredicateValidator : IInputValidator
         {
             private readonly Predicate<string> _predicate;
 
@@ -131,6 +131,12 @@ namespace WebShot.Menu.Menus
         public StringValidator Regex(string pattern, bool ignoreCase = true, bool matchEntireString = true)
         {
             _inputValidators.Add(new RegexValidator(pattern, ignoreCase, matchEntireString));
+            return this;
+        }
+
+        public StringValidator IsRegexPattern()
+        {
+            _inputValidators.Add(new RegexPatternValidator());
             return this;
         }
 
@@ -174,9 +180,9 @@ namespace WebShot.Menu.Menus
             return this;
         }
 
-        public StringValidator If(Predicate<string> predicate)
+        public StringValidator Predicate(Predicate<string> predicate, string description = "Invalid string pattern.")
         {
-            _inputValidators.Add(new PredicateValidator(predicate));
+            _inputValidators.Add(new PredicateValidator(predicate, description));
             return this;
         }
 

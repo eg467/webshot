@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Immutable;
+using System.Linq;
 
 namespace WebshotService.Entities
 {
@@ -30,6 +31,9 @@ namespace WebshotService.Entities
         {
             CurrentProject = currentProject;
         }
+
+        public ScheduledProject? ById(string projectId) =>
+            ScheduledProjects.FirstOrDefault(p => string.Equals(p.ProjectId, projectId, StringComparison.Ordinal));
     }
 
     public record ScheduledProject
@@ -82,6 +86,15 @@ namespace WebshotService.Entities
             LastRun = lastRun;
             RunImmediately = runImmediately;
             Interval = interval;
+        }
+
+        public override string ToString()
+        {
+            var scheduledFor = ScheduledFor;
+
+            return scheduledFor is object
+                ? $"{ProjectName} [{TargetDomains}] (every {((int)Interval.TotalMinutes)} mins, next due {scheduledFor.Value.TimeDiffLabel()})"
+                : $"{ProjectName} [{TargetDomains}]";
         }
     }
 }

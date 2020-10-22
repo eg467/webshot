@@ -49,33 +49,29 @@ namespace WebShot.Menu.Menus
     {
         public ConsoleMenu(
             List<IMenuOption<string>> options,
-            string header,
-            IOutput description,
+            MenuOutput output,
             Inputter<string> inputGetter)
-            : base(options, header, description, inputGetter)
+            : base(options, output, inputGetter)
         {
         }
     }
 
-    public class Menu<TInput> : IMenu
+    public class Menu<TInput> : IMenu, ICompletionHandler
     {
         protected readonly List<IMenuOption<TInput>> _options;
-        private readonly string _header;
-        private readonly IOutput _description;
+        private readonly MenuOutput _output;
         private readonly Inputter<TInput> _inputGetter;
 
         public CompletionHandler CompletionHandler { get; set; } =
             CompletionHandlers.Back;
 
         public Menu(
-            List<IMenuOption<TInput>> options,
-            string header,
-            IOutput? description,
+            IEnumerable<IMenuOption<TInput>> options,
+            MenuOutput output,
             Inputter<TInput> inputGetter)
         {
-            _options = options;
-            _header = header;
-            _description = description ?? ColoredOutput.Empty;
+            _options = new(options);
+            _output = output;
             _inputGetter = inputGetter;
         }
 
@@ -109,11 +105,11 @@ namespace WebShot.Menu.Menus
 
             void DisplayHeader()
             {
-                ColoredOutput headerOutput = new(_header, menuColor);
+                ColoredOutput headerOutput = new(_output.Header, menuColor);
                 headerOutput.PrintHeader();
             }
 
-            void DisplayDescription() => _description.WriteLine();
+            void DisplayDescription() => _output.Description.WriteLine();
 
             void DisplayOptionPrompts()
             {
@@ -172,6 +168,21 @@ namespace WebShot.Menu.Menus
                     matcher: new RegexOptionMatcher(/* language=regex */ @"exit|quit"),
                     completionHandler: _ => Task.CompletedTask /* CompletionHandlers.Exit*/));
         }
+    }
+
+    public class SilentMenu : IMenu, ICompletionHandler
+    {
+        private readonly Func<ICompletionHandler, Task> _action;
+        public CompletionHandler CompletionHandler { get; set; }
+
+        public SilentMenu(Func<ICompletionHandler, Task> action)
+        {
+            _action = action;
+            CompletionHandler = CompletionHandlers.Back;
+        }
+
+        public Task<CompletionHandler> DisplayAsync() =>
+            _action(this).ContinueWith(_ => CompletionHandler);
     }
 
     public interface IMenu

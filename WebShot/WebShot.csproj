@@ -12,6 +12,7 @@
 		<PackageReference Include="NLog.Extensions.Logging" Version="1.6.5" />
 		<PackageReference Include="Selenium.WebDriver.ChromeDriver" Version="86.0.4240.2200" />
 		<PackageReference Include="System.Collections.Immutable" Version="5.0.0-rc.2.20475.5" />
+		<PackageReference Include="System.Linq.Async" Version="4.1.1" />
 	</ItemGroup>
 
 	<ItemGroup>

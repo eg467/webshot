@@ -11,6 +11,7 @@ using System.Linq;
 using WebshotService.Screenshotter;
 using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 
 namespace WebshotService.State.Store
 {
@@ -44,6 +45,11 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.SetSeedUris(uris));
         }
 
+        public void SetCredentials(ProjectCredentials credentials)
+        {
+            _store.Dispatch(new Actions.ProjectActions.SetProjectCredentials(credentials));
+        }
+
         public void SetSpiderOptions(SpiderOptions spiderOptions)
         {
             _store.Dispatch(new Actions.ProjectActions.SetSpiderOptions(spiderOptions));
@@ -65,6 +71,16 @@ namespace WebshotService.State.Store
             _store.Dispatch(ActionCreators.CloseProject());
         }
 
+        public void DeleteProject(string id)
+        {
+            if (string.Equals(State.CurrentProject?.Id, id))
+                CloseCurrentProject();
+
+            var newList = State.RecentProjects.ToList();
+            newList.RemoveAll(x => x.Key == id);
+            _store.Dispatch(new Actions.RecentProjectsActions.Set(newList));
+        }
+
         public void SetProgress(TaskProgress currentProgress)
         {
             _store.Dispatch(new Actions.ApplicationActions.SetProgress(currentProgress));
@@ -84,7 +100,8 @@ namespace WebshotService.State.Store
                 ? await spider.Crawl(token.Value, progress)
                 : await spider.Crawl(progress);
 
-            SetSpiderResults(results);
+            _store.Dispatch(new Actions.ProjectActions.SetCrawlResults(results));
+
             Dictionary<Uri, bool> newTargets = results.SitePages.ToDictionary(u => u, _ => true);
             MergePreviouslyDisabledPages(newTargets);
             SelectScreenshotUris(newTargets);
@@ -108,7 +125,7 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.SetTargetPages(pages));
         }
 
-        public async Task RunScreenshotter(CancellationToken? token, IProgress<TaskProgress>? progress = null)
+        public async Task RunScreenshotter(CancellationToken? token, IProgress<TaskProgress>? progress = null, Device deviceFilter = ~Device.None)
         {
             if (State.CurrentProject is null)
             {
@@ -117,18 +134,13 @@ namespace WebshotService.State.Store
             var projectStore = _projectStoreFactory.Create(State.CurrentProject.Id);
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(true));
             var logger = _loggerFactory.CreateLogger<ProjectScreenshotter>();
-            var screenshotter = new ProjectScreenshotter(projectStore, logger);
+            var screenshotter = new ProjectScreenshotter(projectStore, logger, deviceFilter);
             await screenshotter.TakeScreenshotsAsync(token, progress);
 
             var projectResults = projectStore?.GetResultsBySessionId() ?? new();
 
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(false));
             _store.Dispatch(new Actions.ProjectActions.SetProjectResults(projectResults.ToImmutableArray()));
-        }
-
-        private void SetSpiderResults(CrawlResults results)
-        {
-            _store.Dispatch(new Actions.ProjectActions.SetCrawlResults(results));
         }
 
         public void SetScreenshotOptions(ScreenshotOptions options)
@@ -140,6 +152,97 @@ namespace WebshotService.State.Store
         {
             _store.Dispatch(new Actions.ProjectActions.SetTargetPages(uris));
         }
+
+        #region Scheduler
+
+        public void AddOrEnableProject(Project project, TimeSpan? interval = null)
+        {
+            // This will read every project file and update the domain list.
+            var domainLabel = string.Join(", ", project.SeedDomains());
+
+            var existingScheduled = State.SchedulerState.ScheduledProjects
+                .FirstOrDefault(p => p.ProjectId == project.Id);
+
+            if (existingScheduled?.Enabled == true)
+                return;
+
+            interval ??= existingScheduled?.Interval ?? TimeSpan.FromMinutes(60);
+
+            ScheduledProject schedProj = new(
+                projectId: project.Id,
+                projectName: project.Name,
+                targetDomains: domainLabel,
+                enabled: true,
+                lastRun: existingScheduled?.LastRun,
+                runImmediately: false,
+                interval: interval.Value);
+
+            IAction action = existingScheduled is object
+                ? new Actions.SchedulerActions.UpdateScheduledProject(schedProj)
+                : new Actions.SchedulerActions.AddScheduledProject(schedProj);
+            _store.Dispatch(action);
+        }
+
+        public void Rename(string name)
+        {
+            _store.Dispatch(new Actions.ProjectActions.Rename(name));
+        }
+
+        public void DisableScheduledProject(string projectId, bool remove = false)
+        {
+            // This will read every project file and update the domain list.
+            var existingScheduled = State.SchedulerState.ScheduledProjects
+                .FirstOrDefault(p => p.ProjectId == projectId);
+
+            if (existingScheduled is null || (!remove && !existingScheduled.Enabled))
+                return;
+
+            static ScheduledProject DisabledProj(ScheduledProject existing) =>
+                existing with { Enabled = false, RunImmediately = false };
+
+            IAction action = remove
+                ? new Actions.SchedulerActions.RemoveProject(projectId)
+                : new Actions.SchedulerActions.UpdateScheduledProject(DisabledProj(existingScheduled));
+            _store.Dispatch(action);
+        }
+
+        public void SetCurrentlyScheduledProject(ScheduledProject schedProj)
+        {
+            IProjectStore store = _projectStoreFactory.Create(schedProj.ProjectId);
+            _store.Dispatch(ActionCreators.RunScheduledProject(store));
+        }
+
+        private void UpdateScheduledProject(string id, Func<ScheduledProject, ScheduledProject> transform)
+        {
+            var schedProj = State.SchedulerState.ById(id);
+            if (schedProj is null)
+                throw new InvalidOperationException("This project must be added to the scheduler before being run.");
+            var activatedProj = transform(schedProj);
+            var action = new Actions.SchedulerActions.UpdateScheduledProject(activatedProj);
+            _store.Dispatch(action);
+        }
+
+        public void RunScheduledProjectImmediately(string id)
+        {
+            UpdateScheduledProject(id, p => p with { Enabled = true, RunImmediately = true });
+        }
+
+        public void ChangeInterval(string id, TimeSpan interval)
+        {
+            UpdateScheduledProject(id, p => p with { Interval = interval });
+        }
+
+        public void ScheduledProjectIsComplete()
+        {
+            _store.Dispatch(new Actions.SchedulerActions.MarkScheduledProjectComplete());
+        }
+
+        public void ToggleScheduler(bool enabled)
+        {
+            _store.Dispatch(new Actions.SchedulerActions.ToggleScheduler(enabled));
+        }
+
+        #endregion Scheduler
 
         public void Dispose()
         {

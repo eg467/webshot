@@ -39,7 +39,6 @@ namespace WebshotService.State.Actions.SchedulerActions
     public record AddScheduledProject(ScheduledProject NewScheduledProject) : IAction;
     public record RemoveProject(string ProjectId) : IAction;
     public record UpdateScheduledProject(ScheduledProject Project) : IAction;
-    public record RunImmediately(string ProjectId) : IAction;
     public record MarkScheduledProjectComplete : IAction { }
     public record CurrentProjectChanged(Project? Project) : IAction;
 }

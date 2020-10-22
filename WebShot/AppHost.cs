@@ -1,4 +1,5 @@
 ﻿using System;
+using WebshotService.State;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
@@ -12,18 +13,14 @@ using WebShot.Menu.Options;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using System.IO;
-using System.Threading;
-using Newtonsoft.Json;
 using WebshotService.ProjectStore;
 using System.Diagnostics.CodeAnalysis;
 using System.Collections.Immutable;
 using static WebShot.Menu.Menus.StringValidator;
 using WebshotService;
 using Microsoft.Extensions.Logging;
-using WebshotService.Screenshotter;
-using System.Drawing.Text;
-using OpenQA.Selenium.DevTools.Debugger;
 using WebshotService.Stats;
+using Webshot;
 
 namespace WebShot
 {
@@ -43,6 +40,9 @@ namespace WebShot
 
         private readonly MenuNavigator _menuNav;
         private readonly FileProjectStoreFactory _projectStoreFactory;
+
+        private FileProjectStore CurrentProjectStore =>
+            (FileProjectStore)_projectStoreFactory.Create(CurrentProject.Id);
 
         private bool IsRoot => _menuNav.Count == 1;
 
@@ -73,15 +73,17 @@ namespace WebShot
             _appState.SetCurrentProject(path);
         }
 
-        private void CreateProject(string path)
-        {
-            _appState.SetCurrentProject(path);
-        }
-
         private void CloseProject()
         {
             if (State.CurrentProject is object)
                 _appState.CloseCurrentProject();
+        }
+
+        private void DeleteProject(string id)
+        {
+            _appState.DeleteProject(id);
+            var store = (FileProjectStore)_projectStoreFactory.Create(id);
+            store.Delete();
         }
 
         private void EnsureExists([NotNull] Project? project)
@@ -92,14 +94,9 @@ namespace WebShot
 
         #region Menus
 
-        public IMenu GenericNavigationMenu(
-            string header,
-            IOutput? description,
-            List<IMenuOption<string>> options)
+        public IMenu GenericNavigationMenu(MenuOutput output, List<IMenuOption<string>> options)
         {
-            var prompter = Inputters.ConsolePrompt((ColoredOutput)"Enter Selection:");
-            description ??= ColoredOutput.Empty;
-            var menu = new ConsoleMenu(options, header, description, prompter);
+            Menu<string> menu = MenuBuilder.CreateConsoleMenu(new(options, output));
             menu.AddNavOptions(IsRoot);
             return menu;
         }
@@ -109,9 +106,8 @@ namespace WebShot
             CloseProject();
             var options = new List<IMenuOption<string>>{
                 new ConsoleOption(
-                    new OptionPrompt("Create <Project Directory Path>", "Create a project"),
-                    handler: (m,_) => CreateProject(m.Groups["path"].Value),
-                    matcher: new RegexOptionMatcher("create (?<path>.+)"),
+                    new OptionPrompt("Create", "Create a project"),
+                    asyncHandler: CreateProject,
                     completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
 
                 new ConsoleOption(
@@ -122,26 +118,189 @@ namespace WebShot
 
                 new ConsoleOption(
                     new OptionPrompt("Recent", "Select a recent project to open"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(ChooseRecentProject)),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ChooseRecentProjectMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Scheduler", "Scheduler options and operation"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(SchedulerMenu)),
             };
 
-            return GenericNavigationMenu("Main Menu", null, options);
+            Task CreateProject(Match m, ICompletionHandler handler)
+            {
+                InputParserFactory inputter = new();
+
+                string projectPathOrDir = inputter.New(
+                    "Directory or filename of new project",
+                    v => v.Predicate(
+                        p => File.Exists(p) || Directory.Exists(p),
+                        "Invalid file or directory path"))
+                .Str();
+                _appState.SetCurrentProject(projectPathOrDir);
+
+                var uri = inputter.New("Enter a seed URI (you can add more later)").Uri();
+                _appState.SetSeedUris(new[] { uri });
+
+                var name = inputter.New("Enter project name").Str(Maybe.From(uri.Authority));
+                _appState.Rename(name);
+                return Task.CompletedTask;
+            }
+
+            return GenericNavigationMenu(new("Main Menu"), options);
         }
 
-        public IMenu ChooseRecentProject()
+        public IMenu SchedulerMenu()
         {
-            return new SelectionMenu<KeyValuePair<string, string>>(
-                "Choose a Recent Project",
-                null,
-                State.RecentProjects.Reverse().Take(10),
-                x => $"{x.Value} ({x.Key})",
+            var schedState = State.SchedulerState;
+            ScheduledProject ChangeInterval(string projectId, int newIntervalMins)
+            {
+                var scheduledProject = schedState.ById(projectId)
+                    ?? throw new ArgumentException("Invalid project ID.", nameof(projectId));
+                return scheduledProject with { Interval = TimeSpan.FromMinutes(newIntervalMins) };
+            }
+
+            var options = new List<IMenuOption<string>>{
+                new ConsoleOption(
+                    new OptionPrompt("Run", "Schedule projects for automatic execution"),
+                    asyncHandler: (_,_2) => RunScheduler(),
+                    completionHandler: CompletionHandlers.Repeat),
+
+                new ConsoleOption(
+                    new OptionPrompt("Choose", "Choose which projects should run automatically"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(EnableScheduledProjectsMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("Interval <Interval in Minutes> <Project File>", "Create a project", true),
+                    handler: (m,_) => ChangeInterval(m.Groups["projectId"].Value, int.Parse(m.Groups["interval"].Value)),
+                    matcher: new RegexOptionMatcher( /* language=regex */ @"interval\s+(?<interval>\d+)\s+(?<projectId>.*)"),
+                    completionHandler: CompletionHandlers.Repeat),
+
+                new ConsoleOption(
+                    new OptionPrompt("Now", "Schedule a project for an immediate run"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(ChooseImmediateRunMenu)),
+            };
+
+            IMenu ChooseImmediateRunMenu() =>
+                MenuBuilder.CreateSelectionMenu<ScheduledProject>(new(
+                    output: new("Choose a project to run immediately"),
+                    items: schedState!.ScheduledProjects,
+                    labeler: p => p.ToString(),
+                    selectionHandler: (x, c) =>
+                    {
+                        _appState.RunScheduledProjectImmediately(x.Item.ProjectId);
+                        c.CompletionHandler = CompletionHandlers.Back;
+                        return Task.CompletedTask;
+                    }));
+
+            async Task RunScheduler()
+            {
+                var logger = _loggerFactory.CreateLogger<ProjectScheduler>();
+                ProjectScheduler scheduler = new(this._appState, logger);
+                await scheduler.Run();
+            }
+
+            Func<string, ColoredOutput> outputter = ColoredOutput.ColoredFactory(ConsoleColor.Gray);
+            IEnumerable<ColoredOutput> descriptionLines = State.SchedulerState.ScheduledProjects
+                .Where(p => p.ScheduledFor is object)
+                .Select(p => outputter(p.ToString()));
+
+            MixedOutput description = MixedOutput.Vertical(descriptionLines);
+            return GenericNavigationMenu(new("Scheduler Menu", description), options);
+        }
+
+        public IMenu EnableScheduledProjectsMenu()
+        {
+            // Recently opened projects.
+
+            //var recent = State.RecentProjects
+            //    .Select(x => KeyValuePair.Create(x.Key, (x.Value, false)));
+            var scheduledProjects = State.SchedulerState.ScheduledProjects;
+
+            Dictionary<string, string> itemDict = new(State.RecentProjects);
+            // Projects that are currently scheduled but might not have been recently opened.
+            foreach (var p in scheduledProjects)
+                itemDict[p.ProjectId] = p.ProjectName;
+
+            bool IsScheduled(string id) =>
+                State.SchedulerState.ById(id)?.Enabled == true;
+
+            var items = itemDict
+                .Select(x => (IdName: x, Enabled: IsScheduled(x.Key)))
+                .OrderBy(x => x.IdName.Value);
+
+            Task Handler(ListWithSelection<(KeyValuePair<string, string> project, bool enabled)> projects, ICompletionHandler completion)
+            {
+                foreach (var selection in projects.Items)
+                {
+                    if (selection.enabled)
+                    {
+                        var store = _projectStoreFactory.Create(selection.project.Key);
+                        var project = store.Load();
+                        _appState.AddOrEnableProject(project);
+                    }
+                    else
+                    {
+                        _appState.DisableScheduledProject(selection.project.Key);
+                    }
+                }
+                completion.CompletionHandler = CompletionHandlers.Back;
+                return Task.CompletedTask;
+            }
+
+            return MenuBuilder.CreateToggleMenu<KeyValuePair<string, string>>(new(
+                output: new("De/Schedule recent projects to automatically run"),
+                items: items,
+                labeler: (x => $"{x.Value} ({x.Key})"),
+                selectionHandler: Handler));
+        }
+
+        public IMenu ChooseRecentProjectMenu()
+        {
+            async Task ChooseProject(ICompletionHandler completion)
+            {
+                var projectId = await ChooseRecentProject();
+                if (projectId is null)
+                {
+                    completion.CompletionHandler = CompletionHandlers.Back;
+                    return;
+                }
+                LoadProject(projectId);
+                completion.CompletionHandler = CompletionHandlers.FromMenuCreator(ProjectMenu);
+            }
+
+            return new SilentMenu(ChooseProject);
+        }
+
+        private Task<string?> ChooseRecentProject(int maxProjects = 10)
+        {
+            string? result = null;
+
+            var input = new MenuBuilder.CreateSelectionMenuInput<KeyValuePair<string, string>>(
+                new("Choose a recent Project"),
+                this.State.RecentProjects.Reverse().Take(maxProjects),
                 (r, c) =>
                 {
-                    LoadProject(r.Item.Key);
-                    c.CompletionHandler = CompletionHandlers.FromMenuCreator(ProjectMenu);
+                    result = r.Item.Key;
                     return Task.CompletedTask;
                 },
-                CompletionHandlers.Back);
+                x => $"{x.Value} ({x.Key})")
+            {
+                KeyPressHandler = (args, completion) =>
+                {
+                    if (args.Key == ConsoleKey.Delete)
+                    {
+                        string projectId = args.Item.Key;
+                        string projectName = args.Item.Value;
+                        string prompt = $"Do you want to delete project: {projectName} [{projectId}] and all its files?";
+                        if (DefaultMenuLines.Confirm(prompt))
+                            DeleteProject(projectId);
+
+                        completion.CompletionHandler = CompletionHandlers.Repeat;
+                    }
+                }
+            };
+
+            var menu = MenuBuilder.CreateSelectionMenu(input);
+            return menu.DisplayAsync().ContinueWith(_ => result);
         }
 
         public IMenu ProjectMenu()
@@ -151,6 +310,12 @@ namespace WebShot
                     new OptionPrompt("'File' or 'Dir'", "Open project file or directory"),
                     asyncHandler: Handler,
                     matcher: new RegexOptionMatcher("file|dir")),
+
+                new ConsoleOption(
+                    new OptionPrompt("Rename <Name?>", "Rename this project (Leave blank to use the domain)"),
+                    asyncHandler: Handler,
+                    matcher: new RegexOptionMatcher(/* language=regex */ @"(?<op>rename)\s*(?<name>.*)")),
+
                 new ConsoleOption(
                     new OptionPrompt("Spider", "Run the spider or set its options"),
                     completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
@@ -165,6 +330,15 @@ namespace WebShot
                     completionHandler: CompletionHandlers.Repeat),
 
                 new ConsoleOption(
+                    new OptionPrompt("Creds", "Set basic authentication credentials"),
+                    completionHandler: CompletionHandlers.FromMenuCreator(SetCredentialsMenu)),
+
+                new ConsoleOption(
+                    new OptionPrompt("ClearCreds", "Clear all basic authentication credentials"),
+                    handler: (x,_) => { _appState.SetCredentials(new()); },
+                    completionHandler: CompletionHandlers.Back),
+
+                new ConsoleOption(
                     new OptionPrompt(
                         "BrokenLinks",
                         $"See a list of broken links ({CurrentProject.SpiderResults.BrokenLinks.Count}) found in your site."),
@@ -176,13 +350,40 @@ namespace WebShot
                     asyncHandler: Handler)
             };
 
+            IMenu SetCredentialsMenu()
+            {
+                return new FactoryMenu<ProjectCredentials>("Enter Basic Authentication Credentials", p =>
+                {
+                    string seedDomain = this.CurrentProject.SeedDomains().First();
+                    Dictionary<Uri, AuthCredentials> creds = new();
+
+                    do
+                    {
+                        Maybe<Uri> defaultDomain = Maybe.From(new Uri(seedDomain));
+                        var credDomain = p.New("Domain").Uri(defaultDomain);
+                        string user = p.New("User").Str();
+                        string password = p.New("Password").Str();
+                        creds[credDomain] = new(user, password, encrypted: true);
+                    } while (DefaultMenuLines.Confirm("Enter another credential?"));
+
+                    return new ProjectCredentials()
+                    {
+                        CredentialsByDomain = creds.ToImmutableDictionary()
+                    };
+                },
+                (x, c) => this._appState.SetCredentials(x),
+                completionHandler: CompletionHandlers.Back);
+            }
+
             Task Handler(Match m, ICompletionHandler c)
             {
                 c.CompletionHandler = CompletionHandlers.Repeat;
 
                 var projectPath = CurrentProject.Id;
 
-                switch (m.Value.ToUpper())
+                // Match on the entire word, or use 'op' group to specify command
+
+                switch (m.Groups["op"]?.Value?.ToUpper() ?? m.Value.ToUpper())
                 {
                     case "FILE":
                         Process.Start(projectPath);
@@ -191,6 +392,14 @@ namespace WebShot
                     case "DIR":
                         var dir = Path.GetDirectoryName(projectPath) ?? throw new DirectoryNotFoundException();
                         Process.Start(dir);
+                        break;
+
+                    case "RENAME":
+                        var name = m.Groups["name"].Value.EmptyToNull()
+                            ?? CurrentProject.SeedDomains().FirstOrDefault()
+                            ?? "Webshot Project";
+
+                        _appState.Rename(name);
                         break;
 
                     case "BROKENLINKS":
@@ -211,8 +420,7 @@ namespace WebShot
 
                     case "STATS":
                         Console.WriteLine("Page Request Statistics:");
-                        var store = (FileProjectStore)_projectStoreFactory.Create(CurrentProject.Id);
-                        var results = store.GetResultsByUri().OrderBy(x => x.Key);
+                        var results = CurrentProjectStore.GetResultsByUri().OrderBy(x => x.Key);
                         foreach (var kv in results)
                         {
                             var uri = kv.Key;
@@ -271,10 +479,8 @@ namespace WebShot
                 return Task.CompletedTask;
             }
 
-            EnsureExists(State.CurrentProject);
             return GenericNavigationMenu(
-                $"Project: {State.CurrentProject.Name} ({State.CurrentProject?.Id})",
-                null,
+                output: new($"Project: {CurrentProject.Name} ({CurrentProject?.Id})"),
                 options);
         }
 
@@ -307,7 +513,7 @@ namespace WebShot
             }
 
             ColoredOutput description = Utils.FormattedSerialize(CurrentProject.Options.ScreenshotOptions);
-            return GenericNavigationMenu("Screenshots", description, options);
+            return GenericNavigationMenu(new("Screenshots", description), options);
         }
 
         public IMenu ScreenshotOptionsMenu()
@@ -317,7 +523,7 @@ namespace WebShot
             //public bool OverwriteResults { get; init; }
             //public bool HighlightBrokenLinks { get; init; }
 
-            ScreenshotOptions Convert(ConverterFactory inputter)
+            ScreenshotOptions Convert(InputParserFactory inputter)
             {
                 ScreenshotOptions options = CurrentProject.Options.ScreenshotOptions;
 
@@ -368,21 +574,21 @@ namespace WebShot
 
         public IMenu SelectTargetPages()
         {
-            var items = CurrentProject.Options.ScreenshotOptions.TargetPages.Select(x => (x.Key, x.Value));
-            return new ToggleMenu<Uri>(
-                "Select pages to screenshoot",
-                null,
-                items: items,
+            var input = new MenuBuilder.CreateToggleMenuInput<Uri>(
+                output: new("Selected pages to screenshoot"),
+                items: CurrentProject.Options.ScreenshotOptions.TargetPages.Select(x => (x.Key, x.Value)),
                 labeler: x => x.AbsoluteUri,
-                handler: Handler,
-                completionHandler: CompletionHandlers.Back);
+                selectionHandler: Handler);
 
-            Task Handler(ListWithSelection<(Uri page, bool enabled)> pages, ICompletionHandler _)
+            return MenuBuilder.CreateToggleMenu(input);
+
+            Task Handler(ListWithSelection<(Uri page, bool enabled)> pages, ICompletionHandler completion)
             {
                 Dictionary<Uri, bool> newPages = new();
                 foreach (var page in pages.Items)
                     newPages[page.page] = page.enabled;
                 _appState.SetTargetPages(newPages);
+                completion.CompletionHandler = CompletionHandlers.Back;
                 return Task.CompletedTask;
             }
         }
@@ -408,7 +614,7 @@ namespace WebShot
                 await cancellableTask.CompleteOrCancel(task);
             }
 
-            return GenericNavigationMenu("Spider", description, options);
+            return GenericNavigationMenu(output: new("Spider", description), options);
         }
 
         public IMenu SpiderOptionSeedMenu()
@@ -423,87 +629,12 @@ namespace WebShot
                     SeedUris = f.New("Enter Seed URIs").MultilineSelect(lines => lines.Select(l => new Uri(l)).ToImmutableArray(), Maybe.From(opts.SeedUris)),
                     FollowInternalLinks = f.New("Follow links within the seed domains?").Bool(Maybe.From(opts.FollowInternalLinks)),
                     FollowExternalLinks = f.New("Follow links to external sites?").Bool(Maybe.From(opts.FollowExternalLinks)),
-                    UriBlacklistPattern = f.New("Pattern to blacklist?", v => v.Custom(new RegexPatternValidator())).Str(Maybe.From(opts.UriBlacklistPattern))
+                    UriBlacklistPattern = f.New("Pattern to blacklist?", v => v.IsRegexPattern()).Str(Maybe.From(opts.UriBlacklistPattern))
                 },
                 (opt, _) => _appState.SetSpiderOptions(opt),
                 completionHandler: CompletionHandlers.Back);
         }
 
-        public static IMenu SimpsonsMenu()
-        {
-            static Task Handler(ListWithSelection<string> r, ICompletionHandler _)
-            {
-                new ColoredOutput(r.Item, ConsoleColor.DarkMagenta)
-                    .FormatLines("You selected: {0}")
-                    .WriteLine();
-                return Task.CompletedTask;
-            }
-
-            var simpsonsMembers = new[] { "Homer", "Marge", "Bart", "Lisa", "Maggie" };
-
-            return new SelectionMenu<string>(
-                "Simpsons",
-                (ColoredOutput)"Choose a Simspsons Family Member",
-                simpsonsMembers,
-                x => x,
-                Handler,
-                CompletionHandlers.Back);
-        }
-
-        public static IMenu ManySimpsonsMenu()
-        {
-            static Task Handler(ListWithSelection<(string Item, bool Enabled)> r, ICompletionHandler _)
-            {
-                if (r.SelectedIndex == -1)
-                {
-                    new ColoredOutput("User cancelled.").WriteLine();
-                    return Task.CompletedTask;
-                }
-
-                var selectedPeople = r.Items
-                    .Where(x => x.Enabled)
-                    .Select(x => new ColoredOutput(x.Item, ConsoleColor.DarkMagenta, ConsoleColor.White));
-
-                MixedOutput.Vertical(selectedPeople).WriteLine();
-                return Task.CompletedTask;
-            }
-
-            var simpsonsMembers = new[] { "Homer", "Marge", "Bart", "Lisa", "Maggie" };
-
-            return new ToggleMenu<string>(
-                header: "Simpsons",
-                description: null,
-                items: simpsonsMembers,
-                labeler: x => x,
-                handler: Handler,
-                completionHandler: CompletionHandlers.Back,
-                3,
-                true);
-        }
-
-        public static IMenu PeopleMenu()
-        {
-            static Person GetPerson(ConverterFactory f)
-            {
-                return new Person(
-                    Name: f.New("Name", v => v.Length(NumRange.AtLeast(3))).Str(),
-                    Age: f.New("Age").Int(range: NumRange.AtLeast(18)),
-                    BirthDate: f.New("Birthdate (MM/DD/YYYY)", v => v.Regex(@"\d{2}/\d{2}/\d{4}")).Select(s => DateTime.Parse(s, Thread.CurrentThread.CurrentCulture)));
-            }
-
-            static Task Handler(Person person, ICompletionHandler completion)
-            {
-                string serializedPerson = JsonConvert.SerializeObject(person);
-                List<ColoredOutput>? lines = ColoredOutput.ToList(null, null, "You serialized...", serializedPerson);
-                MixedOutput.Vertical(lines).WriteLine();
-                return Task.CompletedTask;
-            }
-
-            return new FactoryMenu<Person>("Make a person", GetPerson, Handler, CompletionHandlers.Back);
-        }
-
         #endregion Menus
-
-        public record Person(string Name, int Age, DateTime BirthDate);
     }
 }

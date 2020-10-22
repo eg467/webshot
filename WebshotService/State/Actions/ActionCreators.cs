@@ -43,5 +43,13 @@ namespace WebshotService.State.Actions
                     .Select(p => p with { RunImmediately = true })
                     .ForEach(p => dispatch(new SchedulerActions.UpdateScheduledProject(p)));
             };
+
+        public static ActionCreator<ApplicationState> RunScheduledProject(IProjectStore projectStore) =>
+             (dispatch, getState) =>
+             {
+                 LoadProject(projectStore)(dispatch, getState);
+                 var project = getState().CurrentProject;
+                 dispatch(new SchedulerActions.CurrentProjectChanged(project));
+             };
     }
 }

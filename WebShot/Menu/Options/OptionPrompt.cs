@@ -11,7 +11,6 @@ namespace WebShot.Menu.Options
         private const ConsoleColor DescriptorColor = ConsoleColor.Cyan;
         private const ConsoleColor ParamColor = ConsoleColor.Yellow;
         private const ConsoleColor ExplanationColor = ConsoleColor.Gray;
-
         public MixedOutput Descriptor { get; }
         public ColoredOutput Explanation { get; }
 
@@ -23,9 +22,9 @@ namespace WebShot.Menu.Options
         /// </summary>
         /// <param name="descriptor"></param>
         /// <param name="explanation"></param>
-        public OptionPrompt(string descriptor, string explanation)
+        public OptionPrompt(string descriptor, string explanation, bool showParamIdentifier = true)
         {
-            Descriptor = ParseDescriptor(descriptor);
+            Descriptor = ParseDescriptor(descriptor, showParamIdentifier);
             Explanation = new ColoredOutput(explanation, ExplanationColor);
         }
 
@@ -33,9 +32,9 @@ namespace WebShot.Menu.Options
         /// Colorized parameters in descriptor.
         /// </summary>
         /// <param name="text"></param>
-        /// <param name="includeIdentifier"></param>
+        /// <param name="showParamIdentifier"></param>
         /// <returns></returns>
-        public MixedOutput ParseDescriptor(string text, bool includeIdentifier = true)
+        public MixedOutput ParseDescriptor(string text, bool showParamIdentifier)
         {
             var normal = ColoredOutput.ColoredFactory(DescriptorColor);
             var param = ColoredOutput.ColoredFactory(ParamColor);
@@ -60,7 +59,7 @@ namespace WebShot.Menu.Options
                 var normalText = text.Substring(idx, pStart - idx);
                 items.Add(normal(normalText));
 
-                var paramText = includeIdentifier
+                var paramText = showParamIdentifier
                     ? text.Substring(pStart, pEnd - pStart + ParamStart.Length + ParamEnd.Length - 1)
                     : text.Substring(pStart + ParamStart.Length, pEnd - pStart - ParamEnd.Length);
 

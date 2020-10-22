@@ -7,6 +7,7 @@ using ApplicationActions = WebshotService.State.Actions.ApplicationActions;
 using SchedulerActions = WebshotService.State.Actions.SchedulerActions;
 using ProjectActions = WebshotService.State.Actions.ProjectActions;
 using RecentProjectsActions = WebshotService.State.Actions.RecentProjectsActions;
+using System.Linq;
 
 namespace WebshotService.State.Reducers
 {
@@ -93,6 +94,7 @@ namespace WebshotService.State.Reducers
                     {
                         SpiderOptions = c.Sub(s.SpiderOptions)
                             .Setter<ProjectActions.SetSpiderOptions>(x => x.Options)
+                            .Reducer(SpiderOptionsReducer)
                             .Reduce(),
                         ScreenshotOptions = c.Sub(s.ScreenshotOptions)
                             .Setter<ProjectActions.SetScreenshotOptions>(x => x.Options)
@@ -103,6 +105,18 @@ namespace WebshotService.State.Reducers
                             .Reduce()
                     })
                 .Reduce();
+        }
+
+        public static SpiderOptions SpiderOptionsReducer(SpiderOptions state, IAction action)
+        {
+            return action switch
+            {
+                ProjectActions.SetSeedUris setSeedAction => state with
+                {
+                    SeedUris = setSeedAction.Uris.ToImmutableArray()
+                },
+                _ => state,
+            };
         }
 
         public static ScreenshotOptions ScreenshotOptionsReducer(ScreenshotOptions state, IAction action)
@@ -214,6 +228,7 @@ namespace WebshotService.State.Reducers
                             ScheduledProjects = state.ScheduledProjects.RemoveAll(p => p.ProjectId == removeAction.ProjectId)
                         };
                     }
+
                 default:
                     return state;
             }

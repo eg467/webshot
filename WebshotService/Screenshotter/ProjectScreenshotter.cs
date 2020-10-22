@@ -22,9 +22,11 @@ namespace WebshotService.Screenshotter
         private readonly DateTime _creationTimestamp = DateTime.Now;
         private string ScreenshotDir => _projectStore.GetSessionDirectory(_sessionId);
         private readonly ILogger<ProjectScreenshotter> _logger;
+        private readonly Device _deviceFilter;
 
-        public ProjectScreenshotter(IProjectStore projectStore, ILogger<ProjectScreenshotter> logger)
+        public ProjectScreenshotter(IProjectStore projectStore, ILogger<ProjectScreenshotter> logger, Device deviceFilter)
         {
+            _deviceFilter = deviceFilter;
             _projectStore = projectStore;
             _project = projectStore.Load();
             _sessionId = projectStore.CreateSession();
@@ -43,10 +45,7 @@ namespace WebshotService.Screenshotter
                 .ToList();
             foreach (var uri in selectedTargets)
             {
-                if (token?.IsCancellationRequested == true)
-                {
-                    throw new TaskCanceledException("The screenshotting task was canceled.");
-                }
+                token?.ThrowIfCancellationRequested();
 
                 progress?.Report(++i, selectedTargets.Count, uri.AbsoluteUri);
 
@@ -58,9 +57,11 @@ namespace WebshotService.Screenshotter
             progress?.Report(100, 100, "Completed Taking Screenshots");
         }
 
+        private bool IsFiltered(Device device) => _deviceFilter.HasFlag(device);
+
         private IEnumerable<(Device Device, int Width)> GetEnabledDeviceSizes() =>
             ScreenshotOptions.DeviceOptions
-                .Where(x => x.Value.Enabled && x.Value.PixelWidth > 0)
+                .Where(x => IsFiltered(x.Key) && x.Value.Enabled && x.Value.PixelWidth > 0)
                 .Select(x => (x.Key, x.Value.PixelWidth));
 
         private async Task<PageScreenshots> ScreenshotPageAsAllDevices(ChromeDriverAdapter driver, Uri uri)

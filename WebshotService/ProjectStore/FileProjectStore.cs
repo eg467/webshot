@@ -107,6 +107,12 @@ namespace WebshotService.ProjectStore
             Saved?.Invoke(this, args);
         }
 
+        public void Delete()
+        {
+            Directory.Delete(ScreenshotDir, true);
+            File.Delete(_filestore.FilePath);
+        }
+
         public Image? GetImage(string sessionId, Uri uri, Device device)
         {
             var sessionStore = CreateSessionStore(sessionId);
