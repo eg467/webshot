@@ -56,6 +56,10 @@ namespace WebShot.Menu.Menus
         }
     }
 
+    /// <summary>
+    ///
+    /// </summary>
+    /// <typeparam name="TInput">The type of user input to the menu's options.</typeparam>
     public class Menu<TInput> : IMenu, ICompletionHandler
     {
         protected readonly List<IMenuOption<TInput>> _options;
@@ -131,42 +135,6 @@ namespace WebShot.Menu.Menus
         public void AddOption(IMenuOption<TInput> option)
         {
             _options.Add(option);
-        }
-    }
-
-    [Flags]
-    public enum NavigationOptions
-    {
-        None = 0,
-        Back = 1,
-        Reload = 1 << 1,
-        Exit = 1 << 2,
-        Root = 1 << 3,
-        All = Back | Reload | Exit | Root
-    }
-
-    public static class MenuExtensions
-    {
-        public static void AddNavOptions(this Menu<string> menu, bool isRoot, NavigationOptions options = NavigationOptions.All)
-        {
-            if (!isRoot)
-            {
-                if (options.HasFlag(NavigationOptions.Back))
-                    menu.AddOption(new ConsoleOption(
-                        new OptionPrompt("Back", "Return to the previous menu"),
-                        completionHandler: CompletionHandlers.Back));
-
-                if (options.HasFlag(NavigationOptions.Root))
-                    menu.AddOption(new ConsoleOption(
-                        new OptionPrompt("Root", "Return to the main menu"),
-                        completionHandler: CompletionHandlers.Root));
-            }
-
-            if (options.HasFlag(NavigationOptions.Exit))
-                menu.AddOption(new ConsoleOption(
-                    new OptionPrompt("'Exit' or 'Quit'", "Exit the application"),
-                    matcher: new RegexOptionMatcher(/* language=regex */ @"exit|quit"),
-                    completionHandler: _ => Task.CompletedTask /* CompletionHandlers.Exit*/));
         }
     }
 

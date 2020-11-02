@@ -36,7 +36,7 @@ namespace WebShot
         /// <summary>
         /// The currently opened project. This will be non-null outside of the root/non-project menus.
         /// </summary>
-        private Project CurrentProject => State.CurrentProject!;
+        private Project CurrentProject => State?.CurrentProject ?? throw new NullReferenceException();
 
         private readonly MenuNavigator _menuNav;
         private readonly FileProjectStoreFactory _projectStoreFactory;
@@ -94,36 +94,12 @@ namespace WebShot
 
         #region Menus
 
-        public IMenu GenericNavigationMenu(MenuOutput output, List<IMenuOption<string>> options)
-        {
-            Menu<string> menu = MenuBuilder.CreateConsoleMenu(new(options, output));
-            menu.AddNavOptions(IsRoot);
-            return menu;
-        }
+        private InputMenuBuilder CreateInputMenuBuilder(MenuOutput output) =>
+            MenuBuilder.CreateInputMenu(output).IncludeNavOptions(_menuNav.IsRoot);
 
         public IMenu MainMenu()
         {
             CloseProject();
-            var options = new List<IMenuOption<string>>{
-                new ConsoleOption(
-                    new OptionPrompt("Create", "Create a project"),
-                    asyncHandler: CreateProject,
-                    completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Load <Project File or Directory Path>", "Load a project"),
-                    handler: (m,_) => LoadProject(m.Groups["path"].Value),
-                    matcher: new RegexOptionMatcher("load (?<path>.+)"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(ProjectMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Recent", "Select a recent project to open"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(ChooseRecentProjectMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Scheduler", "Scheduler options and operation"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(SchedulerMenu)),
-            };
 
             Task CreateProject(Match m, ICompletionHandler handler)
             {
@@ -145,7 +121,19 @@ namespace WebShot
                 return Task.CompletedTask;
             }
 
-            return GenericNavigationMenu(new("Main Menu"), options);
+            MenuOutput output = new("Main Menu");
+            return CreateInputMenuBuilder(output)
+                .StartAddingOptions()
+                    .DefaultOnComplete(CompletionHandlers.FromMenuCreator(ProjectMenu))
+                    .AddOption(new("Create", "Create a project"))
+                        .OnSelect(CreateProject)
+                    .AddOption(new("Load <Project File or Directory Path>", "Load a project"))
+                        .OnSelect((m, _) => LoadProject(m.Groups["path"].Value))
+                        .MatchOn("load (?<path>.+)")
+                    .AddOption(new("Recent", "Select a recent project to open"), ChooseRecentProjectMenu)
+                    .AddOption(new("Scheduler", "Scheduler options and operation"), SchedulerMenu)
+                    .BuildOptions()
+                .BuildMenu();
         }
 
         public IMenu SchedulerMenu()
@@ -157,27 +145,6 @@ namespace WebShot
                     ?? throw new ArgumentException("Invalid project ID.", nameof(projectId));
                 return scheduledProject with { Interval = TimeSpan.FromMinutes(newIntervalMins) };
             }
-
-            var options = new List<IMenuOption<string>>{
-                new ConsoleOption(
-                    new OptionPrompt("Run", "Schedule projects for automatic execution"),
-                    asyncHandler: (_,_2) => RunScheduler(),
-                    completionHandler: CompletionHandlers.Repeat),
-
-                new ConsoleOption(
-                    new OptionPrompt("Choose", "Choose which projects should run automatically"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(EnableScheduledProjectsMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Interval <Interval in Minutes> <Project File>", "Create a project", true),
-                    handler: (m,_) => ChangeInterval(m.Groups["projectId"].Value, int.Parse(m.Groups["interval"].Value)),
-                    matcher: new RegexOptionMatcher( /* language=regex */ @"interval\s+(?<interval>\d+)\s+(?<projectId>.*)"),
-                    completionHandler: CompletionHandlers.Repeat),
-
-                new ConsoleOption(
-                    new OptionPrompt("Now", "Schedule a project for an immediate run"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(ChooseImmediateRunMenu)),
-            };
 
             IMenu ChooseImmediateRunMenu() =>
                 MenuBuilder.CreateSelectionMenu<ScheduledProject>(new(
@@ -198,13 +165,29 @@ namespace WebShot
                 await scheduler.Run();
             }
 
-            Func<string, ColoredOutput> outputter = ColoredOutput.ColoredFactory(ConsoleColor.Gray);
-            IEnumerable<ColoredOutput> descriptionLines = State.SchedulerState.ScheduledProjects
-                .Where(p => p.ScheduledFor is object)
-                .Select(p => outputter(p.ToString()));
+            MixedOutput GetDescription()
+            {
+                Func<string, ColoredOutput> outputter = ColoredOutput.ColoredFactory(ConsoleColor.Gray);
+                IEnumerable<ColoredOutput> descriptionLines = State.SchedulerState.ScheduledProjects
+                    .Where(p => p.ScheduledFor is object)
+                    .Select(p => outputter(p.ToString()));
+                return MixedOutput.Vertical(descriptionLines);
+            }
 
-            MixedOutput description = MixedOutput.Vertical(descriptionLines);
-            return GenericNavigationMenu(new("Scheduler Menu", description), options);
+            MenuOutput output = new("Scheduler Menu", GetDescription());
+
+            return CreateInputMenuBuilder(output)
+                .StartAddingOptions()
+                    .DefaultOnComplete(CompletionHandlers.Repeat)
+                    .AddOption(new("Run", "Schedule projects for automatic execution"))
+                        .OnSelect((_, _2) => RunScheduler())
+                    .AddOption(new("Choose", "Choose which projects should run automatically"), EnableScheduledProjectsMenu)
+                    .AddOption(new("Interval <Interval in Minutes> <Project File>", "Create a project", true))
+                        .MatchOn(/* language=regex */ @"interval\s+(?<interval>\d+)\s+(?<projectId>.*)")
+                        .OnSelect((m, _) => ChangeInterval(m.Groups["projectId"].Value, int.Parse(m.Groups["interval"].Value)))
+                    .AddOption(new("Now", "Schedule a project for an immediate run"), ChooseImmediateRunMenu)
+                    .BuildOptions()
+                .BuildMenu();
         }
 
         public IMenu EnableScheduledProjectsMenu()
@@ -305,56 +288,11 @@ namespace WebShot
 
         public IMenu ProjectMenu()
         {
-            List<IMenuOption<string>> options = new List<IMenuOption<string>>{
-                new ConsoleOption(
-                    new OptionPrompt("'File' or 'Dir'", "Open project file or directory"),
-                    asyncHandler: Handler,
-                    matcher: new RegexOptionMatcher("file|dir")),
-
-                new ConsoleOption(
-                    new OptionPrompt("Rename <Name?>", "Rename this project (Leave blank to use the domain)"),
-                    asyncHandler: Handler,
-                    matcher: new RegexOptionMatcher(/* language=regex */ @"(?<op>rename)\s*(?<name>.*)")),
-
-                new ConsoleOption(
-                    new OptionPrompt("Spider", "Run the spider or set its options"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(SpiderMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Screenshots", "Take screenshots of web pages"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(ScreenshotsMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Stats", "View request statistics"),
-                    asyncHandler: Handler,
-                    completionHandler: CompletionHandlers.Repeat),
-
-                new ConsoleOption(
-                    new OptionPrompt("Creds", "Set basic authentication credentials"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(SetCredentialsMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("ClearCreds", "Clear all basic authentication credentials"),
-                    handler: (x,_) => { _appState.SetCredentials(new()); },
-                    completionHandler: CompletionHandlers.Back),
-
-                new ConsoleOption(
-                    new OptionPrompt(
-                        "BrokenLinks",
-                        $"See a list of broken links ({CurrentProject.SpiderResults.BrokenLinks.Count}) found in your site."),
-                    asyncHandler: Handler,
-                    completionHandler: CompletionHandlers.Repeat),
-
-                new ConsoleOption(
-                    new OptionPrompt("Reload", "Reload the current project from the file"),
-                    asyncHandler: Handler)
-            };
-
             IMenu SetCredentialsMenu()
             {
                 return new FactoryMenu<ProjectCredentials>("Enter Basic Authentication Credentials", p =>
                 {
-                    string seedDomain = this.CurrentProject.SeedDomains().First();
+                    string seedDomain = CurrentProject!.SeedDomains().First();
                     Dictionary<Uri, AuthCredentials> creds = new();
 
                     do
@@ -371,7 +309,7 @@ namespace WebShot
                         CredentialsByDomain = creds.ToImmutableDictionary()
                     };
                 },
-                (x, c) => this._appState.SetCredentials(x),
+                (creds, _) => this._appState.SetCredentials(creds),
                 completionHandler: CompletionHandlers.Back);
             }
 
@@ -379,7 +317,7 @@ namespace WebShot
             {
                 c.CompletionHandler = CompletionHandlers.Repeat;
 
-                var projectPath = CurrentProject.Id;
+                var projectPath = CurrentProject!.Id;
 
                 // Match on the entire word, or use 'op' group to specify command
 
@@ -479,30 +417,32 @@ namespace WebShot
                 return Task.CompletedTask;
             }
 
-            return GenericNavigationMenu(
-                output: new($"Project: {CurrentProject.Name} ({CurrentProject?.Id})"),
-                options);
+            MenuOutput output = new($"Project: {CurrentProject.Name} ({CurrentProject?.Id})");
+            return CreateInputMenuBuilder(output)
+                .StartAddingOptions()
+                    .DefaultOnComplete(CompletionHandlers.Repeat)
+                    .DefaultOnSelect(Handler)
+                    .AddOption(new("'File' or 'Dir'", "Open project file or directory"))
+                        .MatchOn("file|dir")
+                    .AddOption(new("Rename <Name?>", "Rename this project (Leave blank to use the domain)"))
+                        .MatchOn(/* language=regex */ @"(?<op>rename)\s*(?<name>.*)")
+                    .AddOption(new("Spider", "Run the spider or set its options"), SpiderMenu)
+                    .AddOption(new("Screenshots", "Take screenshots of web pages"), ScreenshotsMenu)
+                    .AddOption(new("Stats", "View request statistics"))
+                    .AddOption(new("Creds", "Set basic authentication credentials"), SetCredentialsMenu)
+                    .AddOption(new("ClearCreds", "Clear all basic authentication credentials"))
+                        .OnSelect((x, _) => { _appState.SetCredentials(new()); })
+                    .AddOption(new(
+                        "BrokenLinks",
+                        $"See a list of broken links ({CurrentProject!.SpiderResults.BrokenLinks.Count}) found in your site."))
+                    .AddOption(new("Reload", "Reload the current project from the file"))
+                    .BuildOptions()
+                .BuildMenu();
         }
 
         public IMenu ScreenshotsMenu()
         {
-            List<IMenuOption<string>> options = new()
-            {
-                new ConsoleOption(
-                    new OptionPrompt("Pages", "Choose what pages to download."),
-                    completionHandler: CompletionHandlers.FromMenuCreator(SelectTargetPages)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Options", "Choose screenshotting options."),
-                    completionHandler: CompletionHandlers.FromMenuCreator(ScreenshotOptionsMenu)),
-
-                new ConsoleOption(
-                    new OptionPrompt("Run", "Take screenshots."),
-                    asyncHandler: Handler,
-                    completionHandler: CompletionHandlers.Back),
-            };
-
-            async Task Handler(Match _, ICompletionHandler _2)
+            async Task TakeScreenshotHandler(Match _, ICompletionHandler _2)
             {
                 ColoredOutput.WriteLines(Utils.FormattedSerialize(CurrentProject.Options.ScreenshotOptions));
                 if (!DefaultMenuLines.Confirm("Would you like to take screenshots?"))
@@ -513,7 +453,15 @@ namespace WebShot
             }
 
             ColoredOutput description = Utils.FormattedSerialize(CurrentProject.Options.ScreenshotOptions);
-            return GenericNavigationMenu(new("Screenshots", description), options);
+            MenuOutput output = new("Screenshots", description);
+            return CreateInputMenuBuilder(output)
+                .StartAddingOptions()
+                    .AddOption(new("Pages", "Choose what pages to download."), SelectTargetPages)
+                    .AddOption(new("Options", "Choose screenshotting options."), ScreenshotOptionsMenu)
+                    .AddOption(new("Run", "Take screenshots."))
+                        .OnSelect(TakeScreenshotHandler)
+                    .BuildOptions()
+                .BuildMenu();
         }
 
         public IMenu ScreenshotOptionsMenu()
@@ -595,17 +543,6 @@ namespace WebShot
 
         public IMenu SpiderMenu()
         {
-            ColoredOutput description = Utils.FormattedSerialize(CurrentProject.Options.SpiderOptions);
-
-            List<IMenuOption<string>> options = new List<IMenuOption<string>>{
-                new ConsoleOption(
-                    new OptionPrompt("Run", "Run the spider to find all web pages on the site"),
-                    asyncHandler: RunSpiderHandler),
-                new ConsoleOption(
-                    new OptionPrompt("Options", "Set Options"),
-                    completionHandler: CompletionHandlers.FromMenuCreator(SpiderOptionSeedMenu)),
-            };
-
             async Task RunSpiderHandler(Match _, ICompletionHandler completionHandler)
             {
                 using CancellableConsoleTask cancellableTask = new();
@@ -614,7 +551,17 @@ namespace WebShot
                 await cancellableTask.CompleteOrCancel(task);
             }
 
-            return GenericNavigationMenu(output: new("Spider", description), options);
+            MenuOutput output = new(
+                "Spider",
+                (ColoredOutput)Utils.FormattedSerialize(CurrentProject.Options.SpiderOptions));
+
+            return CreateInputMenuBuilder(output)
+                .StartAddingOptions()
+                    .AddOption(new("Run", "Run the spider to find all web pages on the site"))
+                        .OnSelect(RunSpiderHandler)
+                    .AddOption(new("Options", "Set Options"), SpiderOptionSeedMenu)
+                    .BuildOptions()
+                .BuildMenu();
         }
 
         public IMenu SpiderOptionSeedMenu()
