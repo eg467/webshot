@@ -34,7 +34,7 @@ namespace WebShot.Menu.Options
         /// <param name="text"></param>
         /// <param name="showParamIdentifier"></param>
         /// <returns></returns>
-        public MixedOutput ParseDescriptor(string text, bool showParamIdentifier)
+        public static MixedOutput ParseDescriptor(string text, bool showParamIdentifier)
         {
             var normal = ColoredOutput.ColoredFactory(DescriptorColor);
             var param = ColoredOutput.ColoredFactory(ParamColor);
@@ -56,7 +56,7 @@ namespace WebShot.Menu.Options
 
             while (idx < text.Length && pEnd >= 0)
             {
-                var normalText = text.Substring(idx, pStart - idx);
+                var normalText = text[idx..pStart];
                 items.Add(normal(normalText));
 
                 var paramText = showParamIdentifier

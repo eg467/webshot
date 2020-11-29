@@ -36,7 +36,7 @@ namespace WebShot.Menu.Menus
             ColoredOutput inputPrompt = "Enter Selection";
             Inputter<string> prompter = Inputters.ConsolePrompt(inputPrompt);
 
-            // Add navigation optiosn to the end of the option list.
+            // Add navigation options to the end of the option list.
             AddOptions(_navOptions);
 
             return new(_options, _output, prompter);

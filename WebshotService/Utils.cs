@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using System.Text.RegularExpressions;
 using System.Security.Cryptography;
 using System.Collections.Immutable;
+using System.Runtime.Versioning;
 
 namespace WebshotService
 {
@@ -82,7 +83,9 @@ namespace WebshotService
         public static string TimeDiffLabel(this DateTime date)
         {
             var diff = DateTime.Now.Subtract(date);
-
+            var futureTime = diff.TotalMilliseconds > 0;
+            if (!futureTime)
+                diff = -diff;
             string timeLabel;
             if (Math.Abs(diff.TotalDays) > 1d)
                 timeLabel = $"{diff.TotalDays:f1} days";
@@ -91,7 +94,7 @@ namespace WebshotService
             else
                 timeLabel = $"{diff.TotalMinutes:f1} min";
 
-            return diff.TotalMilliseconds > 0 ? $"in {timeLabel}" : $"{timeLabel} ago";
+            return futureTime ? $"in {timeLabel}" : $"{timeLabel} ago";
         }
 
         public static T FindOrAdd<T>(this List<T> items, Predicate<T> match, Func<T> create)
@@ -298,6 +301,7 @@ namespace WebshotService
     /// <summary>
     /// Encryption methods derived from: https://docs.microsoft.com/en-us/dotnet/api/system.security.cryptography.protecteddata?redirectedfrom=MSDN&view=dotnet-plat-ext-3.1
     /// </summary>
+    [SupportedOSPlatform("windows")]
     public static class Encryption
     {
         private static readonly byte[] s_additionalEntropy = { 7, 2, 56, 72, 2, 2, 23, 3, 3, 4, 1, 67 };

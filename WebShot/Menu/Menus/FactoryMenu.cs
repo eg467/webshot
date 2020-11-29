@@ -18,7 +18,7 @@ namespace WebShot.Menu.Menus
 {
     public class FactoryMenu<TOutput> : IMenu
     {
-        private string _header;
+        private readonly string _header;
         private readonly Func<InputParserFactory, TOutput> _creator;
         private readonly CustomOption<TOutput> _option;
 

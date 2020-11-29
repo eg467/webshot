@@ -158,7 +158,7 @@ namespace WebshotService.Stats
     public class RequestStatistics
     {
         public DateTime Timestamp { get; set; }
-        public NavigationTiming Timing { get; set; } = new NavigationTiming();
+        public NavigationTiming? Timing { get; set; } = new NavigationTiming();
 
         public RequestStatistics()
         {

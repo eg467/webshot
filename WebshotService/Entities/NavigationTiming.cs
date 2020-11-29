@@ -35,7 +35,7 @@ namespace WebshotService.Entities
         public int Duration { get; init; }
         public int TransferSize { get; init; }
 
-        private TimeSpan Ts(int ms) => TimeSpan.FromMilliseconds(ms);
+        private static TimeSpan Ts(int ms) => TimeSpan.FromMilliseconds(ms);
 
         public int FromFetch(int time) => time - FetchStart;
 

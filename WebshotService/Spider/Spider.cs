@@ -121,12 +121,16 @@ namespace WebshotService.Spider
 
             if (_options.FollowInternalLinks)
             {
-                ParseLinks(sources.Uri.Uri, html).ForEach(FoundLink);
+                var foundLinks = ParseLinks(sources.Uri.Uri, html).ToList();
+                foreach (var link in foundLinks)
+                {
+                    FoundLink(link);
+                }
             }
         }
 
         private static IEnumerable<Link> ParseLinks(Uri callingPage, string html) =>
-            Regex.Matches(html, @"<a[^>]+href=""([^""]+)""", RegexOptions.IgnoreCase)
+            Regex.Matches(html, @"<a[^>]+href=""?([^""\s>]+)""?", RegexOptions.IgnoreCase)
                 .Cast<Match>()
                 .Select(m => new Link(callingPage, m!.Groups[1].Value));
 
@@ -152,13 +156,19 @@ namespace WebshotService.Spider
 
         private void FoundLink(Link link)
         {
-            var sources = _linkTracker.GetOrCreateSources(link.Target);
-            sources.CallingLinks.Add(link);
-
-            if (sources.Status != SpiderPageStatus.Excluded
-                && !ShouldVisit(sources.Uri.Standardized))
+            try
             {
-                sources.Status = SpiderPageStatus.Excluded;
+                UriSources sources = _linkTracker.GetOrCreateSources(link.Target);
+                sources.CallingLinks.Add(link);
+                if (sources.Status != SpiderPageStatus.Excluded
+                    && !ShouldVisit(sources.Uri.Standardized))
+                {
+                    sources.Status = SpiderPageStatus.Excluded;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, $"Error processing link found from webpage {link.CallingPage}->{link.Target}.");
             }
         }
 

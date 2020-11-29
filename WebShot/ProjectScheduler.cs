@@ -29,7 +29,7 @@ namespace Webshot
 
         private readonly IObservable<long> _observable;
 
-        private bool IsActive => State.CurrentProject is object;
+        private bool IsActive => State.SchedulerState.CurrentProject is not null;
 
         public ProjectScheduler(ApplicationStore appStore, ILogger<ProjectScheduler> logger)
         {

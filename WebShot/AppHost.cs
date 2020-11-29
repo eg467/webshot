@@ -44,7 +44,7 @@ namespace WebShot
         private FileProjectStore CurrentProjectStore =>
             (FileProjectStore)_projectStoreFactory.Create(CurrentProject.Id);
 
-        private bool IsRoot => _menuNav.Count == 1;
+        //private bool IsRoot => _menuNav.Count == 1;
 
         public AppHost(
             ApplicationStore appState,
@@ -139,14 +139,7 @@ namespace WebShot
         public IMenu SchedulerMenu()
         {
             var schedState = State.SchedulerState;
-            ScheduledProject ChangeInterval(string projectId, int newIntervalMins)
-            {
-                var scheduledProject = schedState.ById(projectId)
-                    ?? throw new ArgumentException("Invalid project ID.", nameof(projectId));
-                return scheduledProject with { Interval = TimeSpan.FromMinutes(newIntervalMins) };
-            }
-
-            IMenu ChooseImmediateRunMenu() =>
+              IMenu ChooseImmediateRunMenu() =>
                 MenuBuilder.CreateSelectionMenu<ScheduledProject>(new(
                     output: new("Choose a project to run immediately"),
                     items: schedState!.ScheduledProjects,
@@ -182,9 +175,23 @@ namespace WebShot
                     .AddOption(new("Run", "Schedule projects for automatic execution"))
                         .OnSelect((_, _2) => RunScheduler())
                     .AddOption(new("Choose", "Choose which projects should run automatically"), EnableScheduledProjectsMenu)
-                    .AddOption(new("Interval <Interval in Minutes> <Project File>", "Create a project", true))
-                        .MatchOn(/* language=regex */ @"interval\s+(?<interval>\d+)\s+(?<projectId>.*)")
-                        .OnSelect((m, _) => ChangeInterval(m.Groups["projectId"].Value, int.Parse(m.Groups["interval"].Value)))
+                    .AddOption(new("Interval <Interval in Minutes> <Project File (empty to change all)>", "Choose how often screenshots will be taken.", true))
+                        .MatchOn(/* language=regex */ @"interval\s+(?<interval>\d+)(\s+(?<projectId>.*))?")
+                        .OnSelect((m, _) =>
+                        {
+                            var projectIdMatch = m.Groups["projectId"];
+                            var projectIds = projectIdMatch.Success && projectIdMatch.Value.Length > 0
+                                ? new[] { m.Groups["projectId"].Value }
+                                : State.SchedulerState.ScheduledProjects
+                                    .Where(p => p.Enabled)
+                                    .Select(p => p.ProjectId)
+                                    .ToArray();
+
+                            var intervalMins = int.Parse(m.Groups["interval"].Value);
+                            var interval = TimeSpan.FromMinutes(intervalMins);
+                            
+                            projectIds.ForEach(id => _appState.ChangeInterval(id, interval));
+                        })
                     .AddOption(new("Now", "Schedule a project for an immediate run"), ChooseImmediateRunMenu)
                     .BuildOptions()
                 .BuildMenu();
@@ -315,16 +322,28 @@ namespace WebShot
 
             Task Handler(Match m, ICompletionHandler c)
             {
-                c.CompletionHandler = CompletionHandlers.Repeat;
+                //c.CompletionHandler = CompletionHandlers.Repeat;
 
                 var projectPath = CurrentProject!.Id;
 
                 // Match on the entire word, or use 'op' group to specify command
 
-                switch (m.Groups["op"]?.Value?.ToUpper() ?? m.Value.ToUpper())
+                var op = string.IsNullOrEmpty(m.Groups["op"]?.Value)
+                    ? m.Value.ToUpper()
+                    : m.Groups["op"]?.Value.ToUpper();
+
+                switch (op)
                 {
                     case "FILE":
-                        Process.Start(projectPath);
+                        c.CompletionHandler = CompletionHandlers.Repeat;
+
+                        new Process
+                        {
+                            StartInfo = new ProcessStartInfo("Notepad.exe", projectPath)
+                            {
+                                UseShellExecute = true
+                            }
+                        }.Start();
                         break;
 
                     case "DIR":
@@ -546,8 +565,7 @@ namespace WebShot
             async Task RunSpiderHandler(Match _, ICompletionHandler completionHandler)
             {
                 using CancellableConsoleTask cancellableTask = new();
-                var task = _appState.RunSpider(cancellableTask.Token, cancellableTask.Progress)
-                    /*TODO: REMOVE*/ .ContinueWith(_ => Task.Delay(TimeSpan.FromDays(1)));
+                var task = _appState.RunSpider(cancellableTask.Token, cancellableTask.Progress);
                 await cancellableTask.CompleteOrCancel(task);
             }
 

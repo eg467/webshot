@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Data;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using WebshotService.Entities;
 
@@ -65,7 +66,7 @@ namespace WebshotService.Spider
             return dest;
         }
 
-        public bool TryNextUnvisited(out StandardizedUri? uri)
+        public bool TryNextUnvisited([NotNullWhen(true)] out StandardizedUri? uri)
         {
             uri = _uris
                 .Where(x => x.Value.Status == SpiderPageStatus.Unvisited)

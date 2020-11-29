@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Immutable;
+using System.Runtime.Versioning;
 
 namespace WebshotService.Entities
 {
@@ -10,6 +11,7 @@ namespace WebshotService.Entities
             ImmutableDictionary<Uri, AuthCredentials>.Empty;
     }
 
+    [SupportedOSPlatform("windows")]
     public record AuthCredentials
     {
         public string User { get; init; }

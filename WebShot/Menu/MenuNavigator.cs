@@ -12,7 +12,7 @@ namespace WebShot.Menu
     {
         public event EventHandler? Exited;
 
-        private ILogger<MenuNavigator> _logger;
+        private readonly ILogger<MenuNavigator> _logger;
 
         public MenuNavigator(ILogger<MenuNavigator> logger)
         {
@@ -37,7 +37,7 @@ namespace WebShot.Menu
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex,  ex.Message);
+                    _logger.LogWarning(ex, ex.Message);
                     if (IsRoot)
                         await ToRoot();
                     else
