@@ -21,6 +21,7 @@ using WebshotService;
 using Microsoft.Extensions.Logging;
 using WebshotService.Stats;
 using Webshot;
+using WebshotService.Lighthouse;
 
 namespace WebShot
 {
@@ -139,17 +140,17 @@ namespace WebShot
         public IMenu SchedulerMenu()
         {
             var schedState = State.SchedulerState;
-              IMenu ChooseImmediateRunMenu() =>
-                MenuBuilder.CreateSelectionMenu<ScheduledProject>(new(
-                    output: new("Choose a project to run immediately"),
-                    items: schedState!.ScheduledProjects,
-                    labeler: p => p.ToString(),
-                    selectionHandler: (x, c) =>
-                    {
-                        _appState.RunScheduledProjectImmediately(x.Item.ProjectId);
-                        c.CompletionHandler = CompletionHandlers.Back;
-                        return Task.CompletedTask;
-                    }));
+            IMenu ChooseImmediateRunMenu() =>
+              MenuBuilder.CreateSelectionMenu<ScheduledProject>(new(
+                  output: new("Choose a project to run immediately"),
+                  items: schedState!.ScheduledProjects,
+                  labeler: p => p.ToString(),
+                  selectionHandler: (x, c) =>
+                  {
+                      _appState.RunScheduledProjectImmediately(x.Item.ProjectId);
+                      c.CompletionHandler = CompletionHandlers.Back;
+                      return Task.CompletedTask;
+                  }));
 
             async Task RunScheduler()
             {
@@ -189,7 +190,7 @@ namespace WebShot
 
                             var intervalMins = int.Parse(m.Groups["interval"].Value);
                             var interval = TimeSpan.FromMinutes(intervalMins);
-                            
+
                             projectIds.ForEach(id => _appState.ChangeInterval(id, interval));
                         })
                     .AddOption(new("Now", "Schedule a project for an immediate run"), ChooseImmediateRunMenu)
@@ -332,24 +333,29 @@ namespace WebShot
                     ? m.Value.ToUpper()
                     : m.Groups["op"]?.Value.ToUpper();
 
+                c.CompletionHandler = CompletionHandlers.Repeat;
+
                 switch (op)
                 {
                     case "FILE":
-                        c.CompletionHandler = CompletionHandlers.Repeat;
-
-                        new Process
                         {
-                            StartInfo = new ProcessStartInfo("Notepad.exe", projectPath)
+                            new Process
                             {
-                                UseShellExecute = true
-                            }
-                        }.Start();
-                        break;
+                                StartInfo = new ProcessStartInfo("Notepad.exe", projectPath)
+                                {
+                                    UseShellExecute = true
+                                }
+                            }.Start();
+                            break;
+                        }
 
                     case "DIR":
-                        var dir = Path.GetDirectoryName(projectPath) ?? throw new DirectoryNotFoundException();
-                        Process.Start(dir);
-                        break;
+                        {
+                            var dir = Path.GetDirectoryName(projectPath) ?? throw new DirectoryNotFoundException();
+                            DirectoryInfo info = new(dir);
+                            info.OpenInExplorer();
+                            break;
+                        }
 
                     case "RENAME":
                         var name = m.Groups["name"].Value.EmptyToNull()
@@ -445,6 +451,7 @@ namespace WebShot
                         .MatchOn("file|dir")
                     .AddOption(new("Rename <Name?>", "Rename this project (Leave blank to use the domain)"))
                         .MatchOn(/* language=regex */ @"(?<op>rename)\s*(?<name>.*)")
+                    .AddOption(new("Lighthouse", "Run local Google Lighthouse installation or set its options"), LighthouseMenu)
                     .AddOption(new("Spider", "Run the spider or set its options"), SpiderMenu)
                     .AddOption(new("Screenshots", "Take screenshots of web pages"), ScreenshotsMenu)
                     .AddOption(new("Stats", "View request statistics"))
@@ -457,6 +464,64 @@ namespace WebShot
                     .AddOption(new("Reload", "Reload the current project from the file"))
                     .BuildOptions()
                 .BuildMenu();
+        }
+
+        public IMenu LighthouseMenu()
+        {
+            var availableTests = Lighthouse.Categories.GetAll();
+            var selectedTests = State?.CurrentProject?.Options.LighthouseTests ?? Array.Empty<string>();
+
+            async Task Handler(Match m, ICompletionHandler c)
+            {
+                switch (m.Value.ToUpper())
+                {
+                    case "RUN":
+                        {
+                            using CancellableConsoleTask task = new();
+                            Task lighthouseTask = _appState.RunLighthouseTests(null, task.Token, task.Progress);
+                            await task.CompleteOrCancel(lighthouseTask);
+                            break;
+                        }
+                }
+            }
+
+            MenuOutput output = new($"Lighthouse Testing for Project: {CurrentProject.Name} ({CurrentProject?.Id})");
+            var menuBuilder = CreateInputMenuBuilder(output)
+                .StartAddingOptions()
+                    .DefaultOnComplete(CompletionHandlers.Repeat)
+                    .DefaultOnSelect(Handler);
+
+            if (selectedTests.Length > 0)
+            {
+                menuBuilder = menuBuilder.AddOption(new("Run", $"Lighthouse Test for: {string.Join(", ", selectedTests)}"));
+            }
+
+            menuBuilder = menuBuilder.AddOption(new("Tests", "Choose what tests to run"), LighthouseTestsMenu);
+            return menuBuilder.BuildOptions().BuildMenu();
+        }
+
+        public IMenu LighthouseTestsMenu()
+        {
+            var availableTests = Lighthouse.Categories.GetAll();
+            var selectedTests = State?.CurrentProject?.Options.LighthouseTests ?? Array.Empty<string>();
+
+            Task Handler(ListWithSelection<(string test, bool enabled)> tests, ICompletionHandler completion)
+            {
+                var selectedTests = tests.Items
+                    .Where(i => i.enabled)
+                    .Select(i => i.test)
+                    .ToList();
+
+                _appState.SetLighthouseTests(selectedTests);
+                completion.CompletionHandler = CompletionHandlers.Back;
+                return Task.CompletedTask;
+            }
+
+            return MenuBuilder.CreateToggleMenu<string>(new(
+                output: new("Choose Lighthouse tests to run."),
+                items: availableTests.Select(t => (t, selectedTests.Contains(t))),
+                labeler: (x => x),
+                selectionHandler: Handler));
         }
 
         public IMenu ScreenshotsMenu()

@@ -24,12 +24,12 @@ namespace WebshotService.Screenshotter
         private readonly ILogger<ProjectScreenshotter> _logger;
         private readonly Device _deviceFilter;
 
-        public ProjectScreenshotter(IProjectStore projectStore, ILogger<ProjectScreenshotter> logger, Device deviceFilter)
+        public ProjectScreenshotter(IProjectStore projectStore, ILogger<ProjectScreenshotter> logger, Device deviceFilter, string? sessionId = null)
         {
             _deviceFilter = deviceFilter;
             _projectStore = projectStore;
             _project = projectStore.Load();
-            _sessionId = projectStore.CreateSession();
+            _sessionId = sessionId ?? projectStore.CreateSession();
             _logger = logger;
         }
 

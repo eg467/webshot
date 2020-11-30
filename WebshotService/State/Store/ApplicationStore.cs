@@ -12,11 +12,12 @@ using WebshotService.Screenshotter;
 using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using System.IO;
 
 namespace WebshotService.State.Store
 {
     /// <summary>
-    /// Facade for the redux store and screenshotting tools.
+    /// Facade for the redux store and screenshotting tools. Effectively automatially dispatched Redux action creators.
     /// </summary>
     public sealed class ApplicationStore : IDisposable, IObservable<ApplicationState>
     {
@@ -86,6 +87,55 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ApplicationActions.SetProgress(currentProgress));
         }
 
+        public void SetLighthouseTests(List<string> tests)
+        {
+            if (tests.Except(Lighthouse.Lighthouse.Categories.GetAll()).Any())
+            {
+                throw new ArgumentException("Invalid Lighthouse test(s) provided.", nameof(tests));
+            }
+
+            _store.Dispatch(new Actions.ProjectActions.SetLighthouseTests(tests));
+        }
+
+        public async Task<string> RunLighthouseTests(string? sessionId = null, CancellationToken? token = null, IProgress<TaskProgress>? progress = null)
+        {
+            if (State.CurrentProject is null)
+            {
+                throw new InvalidOperationException("No project is opened.");
+            }
+            var selectedTests = State.CurrentProject.Options.LighthouseTests;
+            if (selectedTests.Except(Lighthouse.Lighthouse.Categories.GetAll()).Any())
+            {
+                throw new InvalidOperationException("No or invalid Lighthouse test(s) provided.");
+            }
+
+            var projectStore = _projectStoreFactory.Create(State.CurrentProject.Id);
+            sessionId ??= projectStore.CreateSession();
+            string sessionDir = projectStore.GetSessionDirectory(sessionId);
+            string lighthouseDir = Path.Combine(sessionDir, "lighthouse");
+            Directory.CreateDirectory(lighthouseDir);
+            // Target pages are shared between lighthouse and screenshooting.
+            var selectedPages = State.CurrentProject.Options.ScreenshotOptions.TargetPages
+                .Where(x => x.Value)
+                .Select(x => x.Key);
+
+            var lighthouse = new Lighthouse.Lighthouse(selectedTests);
+
+            string CreateFilename(Uri url)
+            {
+                var filename = Utils.SanitizeFilename(url.AbsoluteUri);
+                var filepath = Path.Combine(lighthouseDir, filename);
+                return filepath;
+            }
+
+            await lighthouse.AnalyzeUrlsAsync(selectedPages, CreateFilename, token, progress);
+
+            foreach (var url in selectedPages)
+            {
+            }
+            return sessionId;
+        }
+
         public async Task RunSpider(CancellationToken? token = null, IProgress<TaskProgress>? progress = null)
         {
             var options = State.CurrentProject?.Options;
@@ -125,7 +175,7 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.SetTargetPages(pages));
         }
 
-        public async Task RunScreenshotter(CancellationToken? token, IProgress<TaskProgress>? progress = null, Device deviceFilter = ~Device.None)
+        public async Task<string> RunScreenshotter(CancellationToken? token, IProgress<TaskProgress>? progress = null, Device deviceFilter = ~Device.None, string? sessionId = null)
         {
             if (State.CurrentProject is null)
             {
@@ -134,13 +184,13 @@ namespace WebshotService.State.Store
             var projectStore = _projectStoreFactory.Create(State.CurrentProject.Id);
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(true));
             var logger = _loggerFactory.CreateLogger<ProjectScreenshotter>();
-            var screenshotter = new ProjectScreenshotter(projectStore, logger, deviceFilter);
+            sessionId ??= projectStore.CreateSession();
+            var screenshotter = new ProjectScreenshotter(projectStore, logger, deviceFilter, sessionId);
             await screenshotter.TakeScreenshotsAsync(token, progress);
-
             var projectResults = projectStore?.GetResultsBySessionId() ?? new();
-
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(false));
             _store.Dispatch(new Actions.ProjectActions.SetProjectResults(projectResults.ToImmutableArray()));
+            return sessionId;
         }
 
         public void SetScreenshotOptions(ScreenshotOptions options)

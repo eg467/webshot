@@ -57,7 +57,7 @@ namespace Webshot
                 {
                     var store = p.GetService<IObjectStore<ApplicationState>>();
                     ApplicationState initial = store?.Exists == true ? store.Load() : new();
-                    return new Store<ApplicationState>(Reducers.ApplicationReducer, initial);
+                    return new Store<ApplicationState>(ApplicationReducers.ApplicationReducer, initial);
                 })
                 .AddSingleton<ApplicationStore>()
                 .AddSingleton<StoreWatcher>()

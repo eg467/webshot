@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Security.Cryptography;
 using System.Collections.Immutable;
 using System.Runtime.Versioning;
+using System.Reflection;
 
 namespace WebshotService
 {
@@ -80,6 +81,22 @@ namespace WebshotService
 
     public static class Extensions
     {
+        public static T?[] GetAllPublicConstantValues<T>(this Type type)
+        {
+            // https://stackoverflow.com/questions/10261824/how-can-i-get-all-constants-of-a-type-by-reflection
+            return type
+                .GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+                .Where(fi => fi.IsLiteral && !fi.IsInitOnly && fi.FieldType == typeof(T))
+                .Select(x => (T)x.GetRawConstantValue())
+                .ToArray();
+        }
+
+        public static void OpenInExplorer(this DirectoryInfo info)
+        {
+            string exporerPath = Environment.GetEnvironmentVariable("WINDIR") + @"\explorer.exe";
+            Process.Start(exporerPath, info.FullName);
+        }
+
         public static string TimeDiffLabel(this DateTime date)
         {
             var diff = DateTime.Now.Subtract(date);
