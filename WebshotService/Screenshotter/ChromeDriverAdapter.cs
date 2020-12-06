@@ -18,7 +18,7 @@ namespace WebshotService.Screenshotter
         /// <summary>
         /// The image file extension of screenshots, e.g. ".png".
         /// </summary>
-        public static readonly string ImageExtension = $".{_imageFormat.ToString().ToLower()}";
+        //public static readonly string ImageExtension = $".{_imageFormat.ToString().ToLower()}";
 
         private const string AuthExtensionPath = "authextension.zip";
 
@@ -82,7 +82,11 @@ namespace WebshotService.Screenshotter
 
             var requestStats = GetRequestStats();
             var screenshot = _driver.GetScreenshot();
-            screenshot.SaveAsFile(filePath, _imageFormat);
+
+            // Only png is allowed in .net core, regardless of the desired type.
+            // Save as PNG now and convert back later.
+            var pngFilePath = Regex.Replace(filePath, @"\.[a-zA-Z0-9]$", ".png");
+            screenshot.SaveAsFile(pngFilePath, ScreenshotImageFormat.Png);
             _driver.ClearResize();
             return requestStats;
 

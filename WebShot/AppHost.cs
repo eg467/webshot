@@ -333,7 +333,7 @@ namespace WebShot
                     ? m.Value.ToUpper()
                     : m.Groups["op"]?.Value.ToUpper();
 
-                c.CompletionHandler = CompletionHandlers.Repeat;
+                //c.CompletionHandler = CompletionHandlers.Repeat;
 
                 switch (op)
                 {
