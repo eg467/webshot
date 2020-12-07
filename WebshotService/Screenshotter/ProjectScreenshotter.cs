@@ -118,10 +118,10 @@ namespace WebshotService.Screenshotter
 
                 var finalPath = imagePathWithoutExtension + ".jpeg";
                 imageFactory.Load(screenshotPath)
-                    .Format(new PngFormat() { Quality = 60 })
+                    .Format(new JpegFormat() { Quality = 60 })
                     .Save(finalPath);
 
-                //File.Delete(screenshotPath);
+                File.Delete(screenshotPath);
                 return new Screenshot(timing, finalPath, null);
             }
         }
