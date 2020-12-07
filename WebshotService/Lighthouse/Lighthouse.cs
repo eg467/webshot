@@ -1,4 +1,6 @@
-﻿using System;
+﻿using ImageProcessor.Common.Exceptions;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -154,7 +156,7 @@ namespace WebshotService.Lighthouse
 
             if (file is null || !File.Exists(file))
             {
-                throw new InvalidOperationException("Lighthouse, Google Chrome, and Node must be installed to use this feature.");
+                throw new InvalidOperationException("Lighthouse, Google Chrome, and Node.js must be installed to use this feature.");
             }
             return file;
         }
@@ -193,7 +195,7 @@ namespace WebshotService.Lighthouse
             using var p = Process.Start(info);
             if (p is not null)
             {
-                await p?.WaitForExitAsync(token);
+                await p.WaitForExitAsync(token);
             }
         }
 

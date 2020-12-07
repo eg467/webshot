@@ -97,7 +97,10 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.SetLighthouseTests(tests));
         }
 
-        public async Task<string> RunLighthouseTests(string? sessionId = null, CancellationToken? token = null, IProgress<TaskProgress>? progress = null)
+        public async Task<string> RunLighthouseTests(
+            string? sessionId = null,
+            CancellationToken? token = null,
+            IProgress<TaskProgress>? progress = null)
         {
             if (State.CurrentProject is null)
             {
@@ -129,10 +132,6 @@ namespace WebshotService.State.Store
             }
 
             await lighthouse.AnalyzeUrlsAsync(selectedPages, CreateFilename, token, progress);
-
-            foreach (var url in selectedPages)
-            {
-            }
             return sessionId;
         }
 

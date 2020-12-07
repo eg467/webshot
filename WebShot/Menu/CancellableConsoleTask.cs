@@ -95,23 +95,16 @@ namespace WebShot.Menu
 
             Task t = task.ContinueWith(_ =>
             {
+                //if (_lastWriteLine >= 0)
+                //{
+                //    Console.SetCursorPosition(0, _lastWriteLine);
+                //}
+
                 if (_status != Status.UserCancelled)
                 {
                     var handle = GetStdHandle(STD_INPUT_HANDLE);
                     CancelIoEx(handle, IntPtr.Zero);
                 }
-
-                try
-                {
-                    if (_lastWriteLine >= 0)
-                        Console.SetCursorPosition(0, _lastWriteLine);
-                }
-                catch (Exception ex)
-                {
-
-                    throw;
-                }
-                
             });
 
             return Task.Run(() => MonitorKeypress());
@@ -122,7 +115,6 @@ namespace WebShot.Menu
             _lastWriteLine = Console.CursorTop;
             var padding = new string(' ', Console.BufferWidth - _recentProgress.Length);
             var message = _recentProgress + padding;
-            Debug.WriteLine($"WritePrompt({message}): lastwriteline = {_lastWriteLine}, Console.CursorTop = {Console.CursorTop}");
             new ColoredOutput(message, ConsoleColor.Black, ConsoleColor.White).WriteLine();
             Console.WriteLine($"Press {_cancelKey} to cancel operation...");
         }

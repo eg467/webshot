@@ -99,8 +99,8 @@ namespace WebshotService
 
         public static string TimeDiffLabel(this DateTime date)
         {
-            var diff = DateTime.Now.Subtract(date);
-            var futureTime = diff.TotalMilliseconds > 0;
+            var diff = date.Subtract(DateTime.Now);
+            var futureTime = diff.TotalMilliseconds >= 0;
             if (!futureTime)
                 diff = -diff;
             string timeLabel;

@@ -50,11 +50,17 @@ namespace WebshotService.Screenshotter
         private ChromeDriver CreateDriver()
         {
             var options = new ChromeOptions();
-            options.IncognitoMode();
+            options.AddArgument("--incognito");
+            options.AddArgument("headless");
+            options.AddArgument("--silent");
+            options.AddArgument("log-level=3");
             if (_projectCredentials.CredentialsByDomain.Any())
                 options.GenerateBasicAuthenticationExtension(AuthExtensionPath, _projectCredentials);
 
-            var driver = new ChromeDriver(Environment.CurrentDirectory, options);
+            var chromeDriverService = ChromeDriverService.CreateDefaultService(Environment.CurrentDirectory);
+            chromeDriverService.HideCommandPromptWindow = true;
+            chromeDriverService.SuppressInitialDiagnosticInformation = true;
+            var driver = new ChromeDriver(chromeDriverService, options);
             return driver;
         }
 
@@ -212,11 +218,6 @@ style.innerHTML = `{combinedSelector} {{ border: 3px dashed {color}; }}`;
 document.getElementsByTagName('head')[0].appendChild(style);";
 
             driver.ExecuteScript(script);
-        }
-
-        public static void IncognitoMode(this ChromeOptions options)
-        {
-            options.AddArgument("--incognito");
         }
 
         /// <summary>

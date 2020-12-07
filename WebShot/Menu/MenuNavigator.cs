@@ -37,7 +37,7 @@ namespace WebShot.Menu
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, ex.Message);
+                    _logger.LogError(ex, ex.Message);
                     if (IsRoot)
                         await ToRoot();
                     else
