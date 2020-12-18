@@ -97,7 +97,7 @@ namespace WebshotService.State.Store
             _store.Dispatch(new Actions.ProjectActions.SetLighthouseTests(tests));
         }
 
-        public async Task<string> RunLighthouseTests(
+        public async Task<string?> RunLighthouseTests(
             string? sessionId = null,
             CancellationToken? token = null,
             IProgress<TaskProgress>? progress = null)
@@ -109,6 +109,7 @@ namespace WebshotService.State.Store
             var selectedTests = State.CurrentProject.Options.LighthouseTests;
             if (selectedTests.Except(Lighthouse.Lighthouse.Categories.GetAll()).Any())
             {
+                return null;
                 throw new InvalidOperationException("No or invalid Lighthouse test(s) provided.");
             }
 
@@ -187,6 +188,9 @@ namespace WebshotService.State.Store
             var screenshotter = new ProjectScreenshotter(projectStore, logger, deviceFilter, sessionId);
             await screenshotter.TakeScreenshotsAsync(token, progress);
             var projectResults = projectStore?.GetResultsBySessionId() ?? new();
+
+            
+
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(false));
             _store.Dispatch(new Actions.ProjectActions.SetProjectResults(projectResults.ToImmutableArray()));
             return sessionId;

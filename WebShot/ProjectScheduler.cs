@@ -78,8 +78,9 @@ namespace Webshot
                 return;
 
             var outputter = ColoredOutput.ColoredFactory(ConsoleColor.Gray);
+            outputter("--------------------").WriteLine();
             SchedulerState.ScheduledProjects
-                .Where(p => p.ScheduledFor is object)
+                .Where(p => p.ScheduledFor.HasValue)
                 .Select(p => p.ToString())
                 .Select(outputter)
                 .ForEach(o => o.WriteLine());
@@ -90,19 +91,24 @@ namespace Webshot
             if (!SchedulerState.Enabled || IsActive)
                 return;
 
+            DisplayUpcoming();
+
             var next = State.NextScheduledProject();
             if (next is null)
                 return;
 
             _appStore.SetCurrentlyScheduledProject(next);
 
-            // Only check as in scheduled mode to save time.
-            Task task = _appStore.RunScreenshotter(
-                cancellableTask.Token,
-                cancellableTask.Progress,
-                Device.Desktop);
+            IProgress<TaskProgress> progress = new Progress<TaskProgress>((p) =>
+            {
+                Console.WriteLine($"({p.Index}/{p.Count}) {p.CurrentItem}");
+            });
 
-            await cancellableTask.CompleteOrCancel(task);
+            // Only check as in scheduled mode to save time.
+            
+            var sessionId = await _appStore.RunScreenshotter(null, progress, Device.Desktop);
+            await _appStore.RunLighthouseTests(sessionId, progress: progress);
+
             _logger.LogInformation("Project ({0}) is complete.", next.ProjectName);
 
             _appStore.ScheduledProjectIsComplete();

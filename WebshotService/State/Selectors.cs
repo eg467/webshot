@@ -12,7 +12,7 @@ namespace WebshotService.State
     {
         public static ScheduledProject? NextScheduledProject(this ApplicationState state) =>
             state.SchedulerState.ScheduledProjects
-                .Where(p => p.Enabled)
+                .Where(p => p.Enabled && p.ScheduledFor.HasValue && p.ScheduledFor.Value < DateTime.Now)
                 .OrderByDescending(p => p.RunImmediately)
                 .ThenBy(p => p.ScheduledFor)
                 .ThenBy(p => p.ProjectName)

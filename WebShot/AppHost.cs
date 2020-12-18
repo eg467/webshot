@@ -22,6 +22,7 @@ using Microsoft.Extensions.Logging;
 using WebshotService.Stats;
 using Webshot;
 using WebshotService.Lighthouse;
+using NLog.LayoutRenderers;
 
 namespace WebShot
 {
@@ -106,15 +107,17 @@ namespace WebShot
             {
                 InputParserFactory inputter = new();
 
-                string projectPathOrDir = inputter.New(
-                    "Directory or filename of new project",
-                    v => v.Predicate(
-                        p => File.Exists(p) || Directory.Exists(p),
-                        "Invalid file or directory path"))
-                .Str();
+                string projectPathOrDir = inputter.New("Directory or filename of new project").Str();
+                if (!File.Exists(projectPathOrDir) || !Directory.Exists(projectPathOrDir))
+                {
+                    Directory.CreateDirectory(projectPathOrDir);
+                }
                 _appState.SetCurrentProject(projectPathOrDir);
 
-                var uri = inputter.New("Enter a seed URI (you can add more later)").Uri();
+                var urlFromDirectoryName = $"https://{Path.GetFileName(projectPathOrDir)}";
+                var defaultValue = Uri.IsWellFormedUriString(urlFromDirectoryName, UriKind.Absolute) && Directory.Exists(projectPathOrDir)
+                    ? Maybe.From(new Uri(urlFromDirectoryName)) : Maybe.Empty<Uri>();
+                var uri = inputter.New("Enter a seed URI (you can add more later)").Uri(defaultValue);
                 _appState.SetSeedUris(new[] { uri });
 
                 var name = inputter.New("Enter project name").Str(Maybe.From(uri.Authority));
