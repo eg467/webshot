@@ -480,9 +480,17 @@ namespace WebShot
                 {
                     case "RUN":
                         {
-                            using CancellableConsoleTask task = new();
-                            Task lighthouseTask = _appState.RunLighthouseTests(null, task.Token, task.Progress);
-                            await task.CompleteOrCancel(lighthouseTask);
+                            try
+                            {
+                                using CancellableConsoleTask task = new();
+                                Task lighthouseTask = _appState.RunLighthouseTests(null, task.Token, task.Progress);
+                                await task.CompleteOrCancel(lighthouseTask);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogError(ex, "Error running lighthouse");
+                            }
+
                             break;
                         }
                 }

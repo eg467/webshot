@@ -189,8 +189,6 @@ namespace WebshotService.State.Store
             await screenshotter.TakeScreenshotsAsync(token, progress);
             var projectResults = projectStore?.GetResultsBySessionId() ?? new();
 
-            
-
             _store.Dispatch(new Actions.ApplicationActions.SetIsTakingScreenshots(false));
             _store.Dispatch(new Actions.ProjectActions.SetProjectResults(projectResults.ToImmutableArray()));
             return sessionId;
